@@ -1,0 +1,17 @@
+{
+  "name": "barnyard-brawl",
+  "version": "1.0.0",
+  "description": "Barnyard Brawl - a farm-themed 3v3 capture-the-flag MOBA that runs in the browser",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

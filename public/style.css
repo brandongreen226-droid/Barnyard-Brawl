@@ -1,0 +1,147 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1b2a1a; color: #f4f1e8;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; user-select: none; }
+.hidden { display: none !important; }
+button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; padding: 8px 14px; background: #f0b429; color: #3b2a05; font-weight: 700; box-shadow: 0 3px 0 #a87b12; }
+button:hover { filter: brightness(1.08); }
+button:active { transform: translateY(2px); box-shadow: 0 1px 0 #a87b12; }
+button:disabled { opacity: .45; cursor: default; }
+button.big { font-size: 18px; padding: 12px 22px; }
+button.small { font-size: 13px; padding: 5px 10px; }
+button.ghost { background: transparent; color: #f4f1e8; box-shadow: none; border: 1px solid #ffffff55; }
+input { font: inherit; padding: 9px 12px; border-radius: 8px; border: 2px solid #6b4f2a; background: #fffaf0; color: #2a1f10; }
+.err { color: #fca5a5; min-height: 22px; margin-top: 8px; font-weight: 700; }
+.muted { opacity: .7; }
+
+.screen { position: absolute; inset: 0; }
+#home, #lobby { background: radial-gradient(circle at 50% 20%, #5a8f3c, #2b4a22 70%); display: flex; align-items: center; justify-content: center; overflow: auto; }
+.panel { background: #f7ecd2; color: #3b2a14; border: 4px solid #8a5a2b; border-radius: 18px; padding: 26px 30px; box-shadow: 0 10px 30px #0008; }
+.home-panel { width: 440px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
+.home-panel label { display: flex; flex-direction: column; text-align: left; gap: 4px; font-weight: 700; }
+.logo { font-size: 44px; }
+h1 { margin: 0; font-size: 40px; color: #b3261e; text-shadow: 2px 2px 0 #f0b429; letter-spacing: 1px; }
+.tag { margin: 0; font-weight: 700; color: #6b4f2a; }
+.or { font-size: 13px; opacity: .7; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; }
+.code { text-transform: uppercase; letter-spacing: 4px; font-weight: 800; text-align: center; }
+.how { text-align: left; font-size: 14px; background: #efe0bd; border-radius: 10px; padding: 8px 12px; }
+.how summary { cursor: pointer; font-weight: 800; }
+.how li { margin: 6px 0; }
+
+.lobby-wrap { width: min(1100px, 96vw); background: #f7ecd2; color: #3b2a14; border: 4px solid #8a5a2b; border-radius: 18px; padding: 18px 24px; margin: 20px auto; box-shadow: 0 10px 30px #0008; }
+.lobby-head { display: flex; justify-content: space-between; align-items: center; }
+.lobby-head .ghost { color: #3b2a14; border-color: #3b2a1455; }
+.roomcode { font-size: 30px; font-weight: 900; letter-spacing: 6px; color: #b3261e; margin: 0 10px; }
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+.team { border-radius: 12px; padding: 10px 12px; }
+.team.t0 { background: #dbeafe; border: 3px solid #3b82f6; }
+.team.t1 { background: #fee2e2; border: 3px solid #ef4444; }
+.team h2 { margin: 0 0 8px; font-size: 20px; }
+.team button { margin: 6px 6px 0 0; }
+.slots { display: flex; flex-direction: column; gap: 6px; min-height: 150px; }
+.slot { display: flex; align-items: center; gap: 10px; background: #ffffffbb; border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+.slot .em { font-size: 26px; width: 34px; text-align: center; }
+.slot .nm { flex: 1; }
+.slot .rd { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #e5e7eb; }
+.slot .rd.ok { background: #86efac; }
+.slot.me { outline: 3px solid #f0b429; }
+.slot.empty { opacity: .45; font-style: italic; font-weight: 400; }
+.slot .x { background: #ef4444; color: #fff; box-shadow: none; padding: 2px 8px; }
+h3 { margin: 16px 0 8px; }
+.champ-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+.champ-card { background: #fff; border: 3px solid #d6c39a; border-radius: 12px; padding: 8px 4px; text-align: center; cursor: pointer; }
+.champ-card:hover { border-color: #f0b429; }
+.champ-card.sel { border-color: #16a34a; background: #dcfce7; }
+.champ-card.taken { opacity: .35; cursor: not-allowed; }
+.champ-card .em { font-size: 38px; }
+.champ-card .nm { font-weight: 800; }
+.champ-card .rl { font-size: 12px; opacity: .7; }
+.champ-info { min-height: 120px; margin-top: 10px; background: #efe0bd; border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.champ-info .abl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 6px; }
+.champ-info .ab-i b, .champ-info .ab-i small { display: block; }
+.lobby-actions { display: flex; gap: 12px; justify-content: center; margin-top: 14px; }
+#readyBtn.on { background: #16a34a; color: #fff; box-shadow: 0 3px 0 #0f6b30; }
+
+/* ---------- GAME ---------- */
+#game { background: #000; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+#topbar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; align-items: stretch; gap: 0; background: #14110dcc; border: 2px solid #8a5a2b; border-radius: 12px; overflow: hidden; pointer-events: none; }
+#topbar .sc { display: flex; align-items: center; gap: 10px; padding: 6px 14px; font-weight: 900; font-size: 26px; }
+#topbar .s0 { background: #1e3a8acc; }
+#topbar .s1 { background: #7f1d1dcc; }
+#topbar .tn { font-size: 13px; font-weight: 700; opacity: .85; }
+#topbar .mid { padding: 4px 14px; text-align: center; min-width: 230px; }
+#timer { font-weight: 800; font-size: 16px; }
+#flagstat { font-size: 12px; line-height: 1.5; }
+#flagstat .home { color: #86efac; } #flagstat .taken { color: #fca5a5; font-weight: 800; } #flagstat .dropped { color: #fde68a; font-weight: 800; }
+#announce { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
+#announce .a { font-size: 28px; font-weight: 900; text-shadow: 0 2px 0 #000, 0 0 12px #000; padding: 4px 16px; animation: pop .25s ease-out; }
+@keyframes pop { from { transform: scale(1.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+#killfeed { position: absolute; top: 10px; right: 10px; width: 300px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+#killfeed .k { background: #000a; border-radius: 6px; padding: 4px 8px; font-size: 14px; display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.c0 { color: #93c5fd; font-weight: 800; } .c1 { color: #fca5a5; font-weight: 800; } .c2 { color: #fde68a; font-weight: 800; }
+#objtimers { position: absolute; top: 80px; right: 10px; font-size: 13px; background: #000a; padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+#stats { position: absolute; left: 10px; bottom: 150px; background: #14110dcc; border: 2px solid #8a5a2b; border-radius: 10px; padding: 6px 10px; font-size: 12px; line-height: 1.6; pointer-events: none; }
+#bottom { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: flex-end; background: #14110de6; border: 2px solid #8a5a2b; border-radius: 14px; padding: 8px 12px; }
+#portrait { position: relative; width: 74px; height: 74px; border-radius: 50%; background: #f7ecd2; border: 4px solid #f0b429; display: flex; align-items: center; justify-content: center; font-size: 44px; }
+#pLvl { position: absolute; bottom: -6px; right: -6px; background: #14110d; border: 2px solid #f0b429; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; display: flex; align-items: center; justify-content: center; font-weight: 900; }
+#centerHud { display: flex; flex-direction: column; gap: 5px; }
+#abilities { display: flex; gap: 8px; }
+.ab { position: relative; width: 60px; height: 60px; border-radius: 10px; background: #3b2f22; border: 3px solid #a88a5c; display: flex; align-items: center; justify-content: center; font-size: 30px; overflow: hidden; }
+.ab .key { position: absolute; top: 1px; left: 4px; font-size: 13px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px #000; }
+.ab .cdo { position: absolute; left: 0; right: 0; bottom: 0; background: #000b; }
+.ab .cdt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 900; text-shadow: 0 1px 3px #000; }
+.ab.locked { filter: grayscale(1) brightness(.5); }
+.ab.ready { border-color: #f0b429; }
+.ab.held { border-color: #fff; box-shadow: 0 0 10px #fff; }
+.bar { position: relative; height: 16px; border-radius: 6px; background: #000; overflow: hidden; border: 1px solid #555; }
+.bar.xp { height: 6px; }
+.bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: #22c55e; transition: width .1s; }
+.bar.xp .fill { background: #a855f7; }
+.bar .shield { position: absolute; top: 0; bottom: 0; background: #e5e7eb; }
+.bar span { position: absolute; inset: 0; text-align: center; font-size: 12px; font-weight: 800; line-height: 15px; text-shadow: 0 1px 2px #000; }
+#invWrap { display: flex; flex-direction: column; gap: 6px; }
+#inv { display: grid; grid-template-columns: repeat(3, 40px); gap: 4px; }
+.slotI { width: 40px; height: 40px; border-radius: 7px; background: #3b2f22; border: 2px solid #6b5a40; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.gold-row { display: flex; gap: 6px; align-items: center; }
+#gold { font-weight: 900; color: #fde047; min-width: 70px; }
+#minimap { position: absolute; right: 10px; bottom: 10px; width: 300px; height: 175px; border: 3px solid #8a5a2b; border-radius: 8px; background: #000; cursor: pointer; }
+#death { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); font-size: 30px; font-weight: 900; text-shadow: 0 2px 4px #000; background: #0009; padding: 12px 24px; border-radius: 12px; pointer-events: none; }
+#chanbar { position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); width: 260px; text-align: center; pointer-events: none; }
+#chanbar .lbl { font-weight: 800; text-shadow: 0 1px 2px #000; }
+#chanbar .track { height: 10px; background: #000a; border-radius: 6px; overflow: hidden; border: 1px solid #fff5; }
+#chanbar .fill { height: 100%; background: #60a5fa; }
+#chat { position: absolute; left: 10px; bottom: 270px; width: 340px; }
+#chatlog { display: flex; flex-direction: column; gap: 2px; font-size: 13px; pointer-events: none; }
+#chatlog div { background: #0008; padding: 2px 6px; border-radius: 4px; }
+#chatIn { width: 100%; margin-top: 4px; }
+.overlay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #f7ecd2; color: #3b2a14; border: 4px solid #8a5a2b; border-radius: 16px; padding: 16px 20px; box-shadow: 0 10px 40px #000a; max-height: 86vh; overflow: auto; }
+#shop { width: 720px; }
+#shop h2, #board h2, #help h2 { margin: 0 0 8px; }
+.shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.item { display: flex; gap: 10px; align-items: center; background: #fff; border: 2px solid #d6c39a; border-radius: 10px; padding: 6px 10px; cursor: pointer; }
+.item:hover { border-color: #f0b429; }
+.item.cant { opacity: .5; }
+.item .ic { font-size: 28px; }
+.item .tx { flex: 1; font-size: 13px; }
+.item .tx b { font-size: 15px; }
+.item .cost { font-weight: 900; color: #a16207; }
+.shop-note { margin: 6px 0; font-weight: 700; }
+.shop-note.bad { color: #b91c1c; }
+.myitems { display: flex; gap: 6px; margin: 8px 0; }
+.myitems .slotI { background: #fff; border-color: #d6c39a; cursor: pointer; }
+#board table { border-collapse: collapse; width: 620px; }
+#board td, #board th { padding: 5px 8px; text-align: left; }
+#board tr.r0 { background: #dbeafe; } #board tr.r1 { background: #fee2e2; }
+#board tr.me td { font-weight: 900; }
+#helpTip { position: absolute; left: 10px; top: 10px; font-size: 12px; background: #0008; padding: 4px 8px; border-radius: 6px; pointer-events: none; }
+#help { width: 560px; font-size: 15px; }
+#help li { margin: 5px 0; }
+#tooltip { position: absolute; max-width: 280px; background: #14110df0; border: 2px solid #f0b429; border-radius: 8px; padding: 8px 10px; font-size: 13px; pointer-events: none; z-index: 10; }
+#tooltip b { color: #fde047; }
+#endScreen { text-align: center; width: 680px; }
+#endScreen h1 { font-size: 46px; }
+#ping { position: absolute; right: 320px; bottom: 12px; font-size: 11px; opacity: .7; pointer-events: none; }

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barnyard Brawl — Capture the Flag</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐄</text></svg>">
+</head>
+<body>
+<!-- HOME -->
+<section id="home" class="screen">
+  <div class="panel home-panel">
+    <div class="logo">🐄🐖🐔🐐</div>
+    <h1>Barnyard Brawl</h1>
+    <p class="tag">3 vs 3 farm MOBA · Capture the Flag</p>
+    <label>Your name<input id="nameIn" maxlength="16" placeholder="Farmer Joe"></label>
+    <button id="createBtn" class="big">Create Room</button>
+    <div class="or">or join a friend</div>
+    <div class="row"><input id="codeIn" maxlength="4" placeholder="CODE" class="code"><button id="joinBtn">Join</button></div>
+    <div id="homeErr" class="err"></div>
+    <details class="how">
+      <summary>How to play</summary>
+      <ul>
+        <li><b>Win:</b> grab the enemy flag from their base and bring it to <b>your</b> flag stand. Your own flag must be at home for the capture to count. First to 3 captures wins.</li>
+        <li>If a flag carrier is slain, the flag drops. Touch your own dropped flag to send it home (or it returns by itself after 20s).</li>
+        <li><b>Right-click</b> to move or attack. <b>Q W E R</b> for abilities (hold to aim, release to cast). R unlocks at level 5.</li>
+        <li><b>Right-click a ripe crop</b> 🥕🌽🌾🎃 and stand still to harvest it for XP and gold.</li>
+        <li><b>B</b> recall home · <b>P</b> shop (in base) · <b>Tab</b> scoreboard · <b>Space</b> center camera · <b>Y</b> lock/unlock camera · <b>Enter</b> team chat.</li>
+        <li>The enemy Grain Silo by the flag can't be damaged until one of their inner silos falls.</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- LOBBY -->
+<section id="lobby" class="screen hidden">
+  <div class="lobby-wrap">
+    <div class="lobby-head">
+      <div><span class="muted">Room code</span> <span id="roomCode" class="roomcode"></span> <button id="copyLink" class="small">Copy invite link</button></div>
+      <button id="leaveBtn" class="small ghost">Leave</button>
+    </div>
+    <div class="teams">
+      <div class="team t0"><h2>🔵 Blue Barn</h2><div id="team0" class="slots"></div><button class="small switch" data-team="0">Join Blue</button><button class="small addbot host-only" data-team="0">+ Add bot</button></div>
+      <div class="team t1"><h2>🔴 Red Barn</h2><div id="team1" class="slots"></div><button class="small switch" data-team="1">Join Red</button><button class="small addbot host-only" data-team="1">+ Add bot</button></div>
+    </div>
+    <h3>Choose your champion</h3>
+    <div id="champGrid" class="champ-grid"></div>
+    <div id="champInfo" class="champ-info"></div>
+    <div class="lobby-actions">
+      <button id="readyBtn" class="big">Ready</button>
+      <button id="startBtn" class="big host-only">Start Game</button>
+    </div>
+    <div id="lobbyErr" class="err"></div>
+  </div>
+</section>
+
+<!-- GAME -->
+<section id="game" class="screen hidden">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div id="topbar">
+      <div class="sc s0"><span class="tn">Blue Barn</span><span id="sc0">0</span></div>
+      <div class="mid"><div id="timer">0:00</div><div id="flagstat"></div></div>
+      <div class="sc s1"><span id="sc1">0</span><span class="tn">Red Barn</span></div>
+    </div>
+    <div id="announce"></div>
+    <div id="killfeed"></div>
+    <div id="objtimers"></div>
+    <div id="stats"></div>
+    <div id="bottom">
+      <div id="portrait"><span id="pEmoji"></span><div id="pLvl">1</div></div>
+      <div id="centerHud">
+        <div id="abilities"></div>
+        <div class="bar hp"><div id="hpFill" class="fill"></div><div id="shFill" class="shield"></div><span id="hpTxt"></span></div>
+        <div class="bar xp"><div id="xpFill" class="fill"></div></div>
+      </div>
+      <div id="invWrap">
+        <div id="inv"></div>
+        <div class="gold-row"><span id="gold">💰 0</span><button id="shopBtn" class="small">Shop (P)</button><button id="recallBtn" class="small">Recall (B)</button></div>
+      </div>
+    </div>
+    <canvas id="minimap" width="240" height="140"></canvas>
+    <div id="death" class="hidden"></div>
+    <div id="chanbar" class="hidden"><div class="lbl"></div><div class="track"><div class="fill"></div></div></div>
+    <div id="chat"><div id="chatlog"></div><input id="chatIn" class="hidden" maxlength="140" placeholder="Team chat — Enter to send"></div>
+    <div id="shop" class="overlay hidden"></div>
+    <div id="board" class="overlay hidden"></div>
+    <div id="helpTip">Right-click move/attack · QWER abilities · B recall · P shop · Tab score · H help</div>
+    <div id="help" class="overlay hidden"></div>
+    <div id="tooltip" class="hidden"></div>
+    <div id="endScreen" class="overlay hidden"></div>
+    <div id="ping"></div>
+  </div>
+</section>
+
+<script src="/shared/data.js"></script>
+<script src="client.js"></script>
+</body>
+</html>
