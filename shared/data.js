@@ -61,20 +61,34 @@
     WALLS.push({ x: W - x - w, y: H - y - h, w, h });
   }
 
-  // Towers ("Grain Silos"). tier 2 = outer, 1 = inner, 0 = base silo (guards the flag)
-  const TOWERS_BLUE = [
-    { lane: 'top', tier: 2, x: 1850, y: 340 }, { lane: 'top', tier: 1, x: 1150, y: 340 },
-    { lane: 'mid', tier: 2, x: 1800, y: 1300 }, { lane: 'mid', tier: 1, x: 1150, y: 1300 },
-    { lane: 'bot', tier: 2, x: 1850, y: 2460 }, { lane: 'bot', tier: 1, x: 1150, y: 2460 },
-    { lane: 'base', tier: 0, x: 660, y: 1290 },
+  // One "Grain Silo" guards each flag. It can always be attacked and rebuilds after it falls.
+  const TOWERS = [
+    { team: 0, lane: 'base', tier: 0, x: 660, y: 1290 },
+    { team: 1, lane: 'base', tier: 0, x: W - 660, y: 1290 },
   ];
-  const TOWERS = [];
-  TOWERS_BLUE.forEach((t) => TOWERS.push(Object.assign({ team: 0 }, t)));
-  TOWERS_BLUE.forEach((t) => TOWERS.push(Object.assign({ team: 1 }, t, { x: W - t.x })));
-  TOWERS.forEach((t, i) => { t.idx = i; t.r = t.tier === 0 ? 62 : C.TOWER_R; });
+  TOWERS.forEach((t, i) => { t.idx = i; t.r = 62; });
   const TOWER_STATS = {
-    normal: { hp: 2600, armor: 30, range: 760, ad: 170, adPerMin: 8, as: 0.85 },
-    base: { hp: 3200, armor: 40, range: 820, ad: 240, adPerMin: 10, as: 0.9, rebuild: 120 },
+    base: { hp: 4200, armor: 40, range: 820, ad: 240, adPerMin: 10, as: 1.0, rebuild: 120, minionPct: 0.5 },
+  };
+
+  // Tall grass: units inside can only be seen by enemies who are also inside the same patch.
+  const BRUSH_TL = [
+    [2000, 550, 230, 80], [1990, 1185, 240, 75], [1290, 740, 140, 90],
+    [870, 770, 150, 80], [1300, 140, 260, 100], [690, 1080, 150, 80],
+  ];
+  const BRUSHES = [];
+  for (const [x, y, w, h] of BRUSH_TL) {
+    BRUSHES.push({ x, y, w, h });
+    BRUSHES.push({ x: W - x - w, y, w, h });
+    BRUSHES.push({ x, y: H - y - h, w, h });
+    BRUSHES.push({ x: W - x - w, y: H - y - h, w, h });
+  }
+  BRUSHES.push({ x: 2330, y: 1060, w: 140, h: 130 });
+  BRUSHES.push({ x: 2330, y: H - 1060 - 130, w: 140, h: 130 });
+  BRUSHES.forEach((b, i) => { b.idx = i; });
+  const brushAt = (x, y) => {
+    for (const b of BRUSHES) if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return b.idx;
+    return -1;
   };
 
   // Jungle camps
@@ -141,10 +155,10 @@
       name: 'Bessie', title: 'the Dairy Defender', icon: '🐄', role: 'Tank', color: '#f5f5f4',
       hp: 660, hpL: 96, ad: 55, adL: 3.5, armor: 36, armorL: 4, as: 0.65, range: 125, ms: 330,
       abilities: {
-        Q: { name: 'Milk Spray', icon: '🥛', type: 'cone', range: 450, arc: 55, cd: 7, dmg: { b: 70, l: 18, ap: 0.5, ad: 0.3 }, fx: { slow: { p: 30, d: 1.5 } }, vis: '#ffffff', desc: 'Sprays milk in a cone, damaging and slowing enemies.' },
+        Q: { name: 'Milk Spray', icon: '🥛', type: 'cone', range: 450, arc: 55, cd: 7, dmg: { b: 70, l: 18, ap: 0.5, ad: 0.3 }, fx: { slow: { p: 30, d: 1.5 } }, vis: 'milk', desc: 'Sprays milk in a cone, damaging and slowing enemies.' },
         W: { name: 'Chew the Cud', icon: '🌿', type: 'buff', cd: 14, dur: 3, hot: { b: 110, l: 22, hpPct: 4 }, stats: { armor: 25 }, desc: 'Heals over 3 seconds and gains bonus armor.' },
         E: { name: 'Stampede', icon: '💨', type: 'dash', range: 480, speed: 1400, cd: 12, stopOnHit: true, dmg: { b: 60, l: 15, ad: 0.4 }, fx: { stun: 1.0 }, desc: 'Charges forward. The first enemy hit is damaged and stunned.' },
-        R: { name: 'Moo-sive Shockwave', icon: '📣', type: 'self_aoe', radius: 420, cd: 70, dmg: { b: 150, l: 30, ap: 0.6, ad: 0.4 }, fx: { knock: 260, slow: { p: 40, d: 2 } }, vis: '#fde68a', desc: 'A mighty MOO knocks back and slows all nearby enemies.' },
+        R: { name: 'Moo-sive Shockwave', icon: '📣', type: 'self_aoe', radius: 420, cd: 70, dmg: { b: 150, l: 30, ap: 0.6, ad: 0.4 }, fx: { knock: 260, slow: { p: 40, d: 2 } }, vis: 'moo', desc: 'A mighty MOO knocks back and slows all nearby enemies.' },
       },
     },
     pig: {
@@ -161,10 +175,10 @@
       name: 'Clucky', title: 'the Egg Bomber', icon: '🐔', role: 'Mage', color: '#fef9c3', ranged: true, atk: 'egg_s',
       hp: 480, hpL: 76, ad: 48, adL: 3, armor: 20, armorL: 3, as: 0.65, range: 525, ms: 330,
       abilities: {
-        Q: { name: 'Egg Toss', icon: '🥚', type: 'ground_aoe', range: 850, radius: 140, delay: 0.6, cd: 5, dmg: { b: 85, l: 22, ap: 0.75 }, vis: '#fef3c7', desc: 'Lobs an egg that explodes at the target area after a short delay.' },
-        W: { name: 'Feather Flurry', icon: '🪶', type: 'self_aoe', radius: 300, cd: 10, dmg: { b: 60, l: 15, ap: 0.5 }, fx: { slow: { p: 40, d: 1.5 } }, vis: '#ffffff', desc: 'Explodes in feathers, damaging and slowing nearby enemies.' },
+        Q: { name: 'Egg Toss', icon: '🥚', type: 'ground_aoe', range: 850, radius: 140, delay: 0.6, cd: 5, dmg: { b: 85, l: 22, ap: 0.75 }, vis: 'egg', desc: 'Lobs an egg that explodes at the target area after a short delay.' },
+        W: { name: 'Feather Flurry', icon: '🪶', type: 'self_aoe', radius: 300, cd: 10, dmg: { b: 60, l: 15, ap: 0.5 }, fx: { slow: { p: 40, d: 1.5 } }, vis: 'feather', desc: 'Explodes in feathers, damaging and slowing nearby enemies.' },
         E: { name: 'Flutter', icon: '🐣', type: 'blink', range: 420, cd: 14, desc: 'Flaps instantly to a nearby spot (can cross walls).' },
-        R: { name: 'Egg Barrage', icon: '🍳', type: 'barrage', range: 900, radius: 420, n: 12, dur: 2.4, aoe: 110, delay: 0.5, cd: 70, dmg: { b: 55, l: 11, ap: 0.3 }, vis: '#fef3c7', desc: 'Rains 12 eggs over a large area for 2.4s.' },
+        R: { name: 'Egg Barrage', icon: '🍳', type: 'barrage', range: 900, radius: 420, n: 12, dur: 2.4, aoe: 110, delay: 0.5, cd: 70, dmg: { b: 55, l: 11, ap: 0.3 }, vis: 'eggrain', desc: 'Rains 12 eggs over a large area for 2.4s.' },
       },
     },
     goat: {
@@ -181,9 +195,9 @@
       name: 'Thunder', title: 'the Stallion', icon: '🐎', role: 'Fighter', color: '#d6b38a',
       hp: 590, hpL: 88, ad: 60, adL: 3.8, armor: 28, armorL: 3.5, as: 0.7, range: 140, ms: 355,
       abilities: {
-        Q: { name: 'Buck Kick', icon: '🦶', type: 'cone', range: 280, arc: 100, cd: 6, dmg: { b: 80, l: 20, ad: 0.8 }, fx: { knock: 220 }, vis: '#fbbf24', desc: 'A wide kick that damages and knocks back enemies in front.' },
+        Q: { name: 'Buck Kick', icon: '🦶', type: 'cone', range: 280, arc: 100, cd: 6, dmg: { b: 80, l: 20, ad: 0.8 }, fx: { knock: 220 }, vis: 'kick', desc: 'A wide kick that damages and knocks back enemies in front.' },
         W: { name: 'Gallop', icon: '🏇', type: 'buff', cd: 12, dur: 3, stats: { msPct: 40 }, cleanse: true, desc: 'Removes slows and roots and gains 40% move speed for 3s.' },
-        E: { name: 'Fence Leap', icon: '🚧', type: 'leap', range: 520, speed: 1200, cd: 11, land: { r: 180, dmg: { b: 50, l: 15, ad: 0.5 }, fx: { slow: { p: 30, d: 1 } } }, desc: 'Leaps over anything (even walls) and slams down, slowing enemies.' },
+        E: { name: 'Fence Leap', icon: '🚧', type: 'leap', range: 520, speed: 1200, cd: 11, land: { r: 180, dmg: { b: 50, l: 15, ad: 0.5 }, fx: { slow: { p: 30, d: 1 } }, vis: 'hoof' }, desc: 'Leaps over anything (even walls) and slams down, slowing enemies.' },
         R: { name: 'Thundering Hooves', icon: '⚡', type: 'dash', range: 900, speed: 1250, cd: 65, dmg: { b: 150, l: 35, ad: 0.8 }, fx: { stun: 1.0 }, desc: 'A long charge that damages and stuns every enemy trampled.' },
       },
     },
@@ -193,8 +207,8 @@
       abilities: {
         Q: { name: 'Static Shock', icon: '✨', type: 'skillshot', range: 950, speed: 1500, width: 55, cd: 8, dmg: { b: 70, l: 18, ap: 0.6 }, fx: { root: 1.0 }, vis: 'static', desc: 'A static wool spark that damages and roots the first enemy hit.' },
         W: { name: 'Wool Shield', icon: '🧶', type: 'ally', range: 650, cd: 10, dur: 3, shield: { b: 90, l: 25, ap: 0.5 }, stats: { msPct: 20 }, desc: 'Shields the ally nearest your cursor (or yourself) and speeds them up.' },
-        E: { name: 'Lullaby', icon: '💤', type: 'ground_aoe', range: 700, radius: 200, delay: 0.8, cd: 15, dmg: { b: 30, l: 10, ap: 0.3 }, fx: { stun: 1.25 }, vis: '#c4b5fd', desc: 'After a short delay, puts enemies in the area to sleep (stun).' },
-        R: { name: 'Shear Bliss', icon: '💖', type: 'self_aoe', radius: 650, cd: 80, allyHeal: { b: 150, l: 35, ap: 0.6 }, vis: '#86efac', desc: 'Heals yourself and all nearby allies.' },
+        E: { name: 'Lullaby', icon: '💤', type: 'ground_aoe', range: 700, radius: 200, delay: 0.8, cd: 15, dmg: { b: 30, l: 10, ap: 0.3 }, fx: { stun: 1.25 }, vis: 'lullaby', desc: 'After a short delay, puts enemies in the area to sleep (stun).' },
+        R: { name: 'Shear Bliss', icon: '💖', type: 'self_aoe', radius: 650, cd: 80, allyHeal: { b: 150, l: 35, ap: 0.6 }, vis: 'bliss', desc: 'Heals yourself and all nearby allies.' },
       },
     },
     bee: {
@@ -212,9 +226,9 @@
       hp: 490, hpL: 76, ad: 50, adL: 3, armor: 21, armorL: 3, as: 0.65, range: 525, ms: 330,
       abilities: {
         Q: { name: 'Bread Bomb', icon: '🍞', type: 'skillshot', range: 950, speed: 1100, width: 70, explode: 150, cd: 6, dmg: { b: 75, l: 20, ap: 0.7 }, vis: 'bread', desc: 'Throws bread that explodes on the first enemy hit (or at max range).' },
-        W: { name: 'Puddle Jump', icon: '💧', type: 'leap', range: 450, speed: 1100, cd: 12, land: { r: 170, dmg: { b: 40, l: 12, ap: 0.4 }, fx: { slow: { p: 30, d: 1 } } }, desc: 'Jumps to a spot and splashes down, slowing enemies.' },
-        E: { name: 'Quack Blast', icon: '🔊', type: 'cone', range: 500, arc: 40, cd: 11, dmg: { b: 60, l: 16, ap: 0.5 }, fx: { knock: 260 }, vis: '#a5f3fc', desc: 'A deafening quack that knocks enemies away.' },
-        R: { name: 'Duck Dive', icon: '🎯', type: 'ground_aoe', range: 1500, radius: 300, delay: 1.2, cd: 70, dmg: { b: 220, l: 45, ap: 0.9 }, vis: '#fca5a5', desc: 'Calls in a flock of diving ducks on a large area after 1.2s.' },
+        W: { name: 'Puddle Jump', icon: '💧', type: 'leap', range: 450, speed: 1100, cd: 12, land: { r: 170, dmg: { b: 40, l: 12, ap: 0.4 }, fx: { slow: { p: 30, d: 1 } }, vis: 'splash' }, desc: 'Jumps to a spot and splashes down, slowing enemies.' },
+        E: { name: 'Quack Blast', icon: '🔊', type: 'cone', range: 500, arc: 40, cd: 11, dmg: { b: 60, l: 16, ap: 0.5 }, fx: { knock: 260 }, vis: 'quack', desc: 'A deafening quack that knocks enemies away.' },
+        R: { name: 'Duck Dive', icon: '🎯', type: 'ground_aoe', range: 1500, radius: 300, delay: 1.2, cd: 70, dmg: { b: 220, l: 45, ap: 0.9 }, vis: 'duckdive', desc: 'Calls in a flock of diving ducks on a large area after 1.2s.' },
       },
     },
   };
@@ -249,7 +263,7 @@
   };
 
   const DATA = {
-    W, H, C, TEAM_NAMES, TEAM_COLORS, TEAM_DARK, TEAM_LIGHT, BASES, FOUNTAINS, LANES, RIVER, WALLS,
+    W, H, C, BRUSHES, brushAt, TEAM_NAMES, TEAM_COLORS, TEAM_DARK, TEAM_LIGHT, BASES, FOUNTAINS, LANES, RIVER, WALLS,
     TOWERS, TOWER_STATS, CAMPS, CAMP_TYPES, NEUTRALS, MINIONS, CHAMPS, ITEMS, ITEMS_BY_ID, STAT_NAMES, BUILDS,
     CROPS, CROP_TYPES, xpToNext, respawnTime,
   };

@@ -31,7 +31,8 @@ Any Node host that supports WebSockets works (Railway, Fly.io, a VPS). The serve
 - Grab the enemy flag from their base and carry it to **your own** flag stand. **Your flag must be at home** for the capture to count. First to **3** captures wins.
 - If the carrier is slain, the flag drops on the spot. Touch your own dropped flag to return it instantly, or it goes home on its own after 20s.
 - Flag carriers move 15% slower (Courier's Boots remove this), can't recall, and are always visible to enemies.
-- The base Grain Silo by each flag is shielded until one of that team's **inner** silos falls. It rebuilds 2 minutes after it's destroyed.
+- Each flag is guarded by a single **Grain Silo** tower. It can always be attacked and rebuilds 2 minutes after it's destroyed.
+- **Tall grass:** enemies can't see you inside a patch unless one of them is in the same patch. Attacking from the grass reveals you for a moment.
 
 ## Controls
 | Input | Action |
@@ -50,7 +51,9 @@ Any Node host that supports WebSockets works (Railway, Fly.io, a VPS). The serve
 
 ## What's in the game
 - **8 champions**, each with 4 farm-themed abilities: Bessie the Cow 🐄 (tank), Porkchop the Pig 🐖 (fighter), Clucky the Chicken 🐔 (mage), Billy the Goat 🐐 (assassin), Thunder the Horse 🐎 (fighter), Wooly the Sheep 🐑 (support), Queenie the Bee 🐝 (marksman), Quackers the Duck 🦆 (mage).
-- **3 lanes** with Grain Silo towers. Minion waves of Chicks 🐥, Field Mice 🐭 and Tractors 🚜.
+- A **dark, misty forest** map with farm touches (barns, fences, hay bales, scarecrows, lanterns, glowing mushrooms), 3 lanes, a river, and patches of **tall grass** to hide in.
+- One **Grain Silo** guards each flag. Minion waves of Chicks 🐥, Field Mice 🐭 and Tractors 🚜 march down every lane.
+- Hand-drawn **animated champions** that walk, leap and strike poses for each ability. Spells are shown by their own effects: milk spray, egg arcs, mud pools, sound waves and more.
 - **Jungle**: Raccoons 🦝, Wild Turkeys 🦃, Coyotes 🐺, plus two river bosses: the Golden Goose 🦢 (gold for the whole team) and the Prize Bull 🐂 (team damage and speed buff).
 - **Crops** 🥕🌽🌾🎃: right-click a ripe patch and stand still to harvest XP and gold. They regrow. Giant Pumpkins in the river are worth the most.
 - **Levels 1–15**, gold, a 14-item shop, fog of war, and bots that fill empty slots. If a player disconnects, a bot takes over until they rejoin with the same name and room code.
@@ -64,4 +67,5 @@ All balance numbers (champion stats, ability damage and cooldowns, items, map la
 | `server/game.js` | Game simulation (combat, flags, minions, jungle, bots, vision) |
 | `server/index.js` | Web server, rooms and lobby |
 | `server/nav.js` | Pathfinding around walls |
-| `public/client.js` | Drawing, HUD, controls |
+| `public/client.js` | HUD, controls, map and unit drawing |
+| `public/art.js` | Animated champions, spell effects, forest scenery |

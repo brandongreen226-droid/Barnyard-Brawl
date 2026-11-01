@@ -14,7 +14,7 @@ input { font: inherit; padding: 9px 12px; border-radius: 8px; border: 2px solid 
 .muted { opacity: .7; }
 
 .screen { position: absolute; inset: 0; }
-#home, #lobby { background: radial-gradient(circle at 50% 20%, #5a8f3c, #2b4a22 70%); display: flex; align-items: center; justify-content: center; overflow: auto; }
+#home, #lobby { background: radial-gradient(circle at 50% 20%, #2a4a3a, #0b1510 75%); display: flex; align-items: center; justify-content: center; overflow: auto; }
 .panel { background: #f7ecd2; color: #3b2a14; border: 4px solid #8a5a2b; border-radius: 18px; padding: 26px 30px; box-shadow: 0 10px 30px #0008; }
 .home-panel { width: 440px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
 .home-panel label { display: flex; flex-direction: column; text-align: left; gap: 4px; font-weight: 700; }

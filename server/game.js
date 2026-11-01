@@ -76,7 +76,7 @@ class Game {
   }
 
   addTower(td) {
-    const st = td.tier === 0 ? D.TOWER_STATS.base : D.TOWER_STATS.normal;
+    const st = D.TOWER_STATS.base;
     const u = this.baseUnit('tower', td.team, td.x, td.y, td.r);
     Object.assign(u, { idx: td.idx, tier: td.tier, lane: td.lane, base: td.tier === 0, st, hp: st.hp, maxHp: st.hp, armor: st.armor, range: st.range, target: 0, rebuildAt: 0 });
     this.units.set(u.id, u);
@@ -169,7 +169,7 @@ class Game {
     return ms;
   }
   shieldOf(u) { let s = 0; if (u.shields) for (const x of u.shields) if (x.until > this.t) s += x.a; return s; }
-  baseVulnerable(team) { return this.towers.some((tw) => tw.team === team && tw.tier === 1 && tw.dead); }
+  baseVulnerable() { return true; }
 
   // ---------------- events ----------------
   // route: 'all' | 0 | 1 | 'pos' (only teams who can see the position)
@@ -180,7 +180,7 @@ class Game {
   damage(src, dst, amt, opts = {}) {
     if (!dst || dst.dead || !(amt > 0)) return 0;
     if (dst.kind === 'neutral' && dst.returning) return 0;
-    if (dst.kind === 'tower' && dst.base && !this.baseVulnerable(dst.team)) return 0;
+    if (src && src.kind === 'minion' && dst.kind === 'tower') amt *= 0.5;
     if (src && src.kind === 'champ' && src.buffs.some((b) => b.bull)) amt *= 1.15;
     if (!opts.true) {
       const ar = dst.kind === 'champ' ? dst.st.armor : dst.armor;
@@ -196,6 +196,7 @@ class Game {
     }
     dst.hp -= amt;
     if (src && src.kind === 'champ') {
+      src.revealUntil = this.t + 1;
       if (dst.kind === 'champ') { dst.damagers.set(src.id, this.t); src.hitChampAt = this.t; }
       if (opts.auto && src.st.ls > 0) this.heal(src, (dealt * src.st.ls) / 100, false);
     }
@@ -292,7 +293,7 @@ class Game {
       dst.hp = 0;
       dst.target = 0;
       for (const c of this.champs) if (c.team !== dst.team) c.gold += 150;
-      if (dst.base) dst.rebuildAt = t + D.TOWER_STATS.base.rebuild;
+      dst.rebuildAt = t + D.TOWER_STATS.base.rebuild;
       this.ev({ e: 'tower', tm: dst.team, tier: dst.tier, lane: dst.lane }, 'all');
     }
   }
@@ -344,6 +345,7 @@ class Game {
     } else if (u.attackCd <= 0) {
       u.windDur = Math.min(0.22, 0.3 / as);
       u.windup = u.windDur;
+      if (u.kind === 'champ') this.ev({ e: 'atk', id: u.id, tx: T.x | 0, ty: T.y | 0 }, 'pos', u);
     }
     return true;
   }
@@ -369,8 +371,15 @@ class Game {
     let len = hyp(dx, dy);
     if (len < 1) { dx = Math.cos(u.ang); dy = Math.sin(u.ang); len = 1; tx = u.x + dx; ty = u.y + dy; }
     const nx = dx / len, ny = dy / len;
+    const ox = u.x, oy = u.y;
     const ok = this.execAbility(u, ab, nx, ny, tx, ty, len);
     if (ok === false) return;
+    const reach = Math.min(len, ab.range || 0);
+    const ev = { e: 'cast', id: u.id, k: key, x: ox | 0, y: oy | 0, a: +Math.atan2(ny, nx).toFixed(2), tx: (ox + nx * reach) | 0, ty: (oy + ny * reach) | 0 };
+    if (ab.type === 'blink') { ev.tx = u.x | 0; ev.ty = u.y | 0; }
+    if (u.dash && u.dash.target) { const T = this.units.get(u.dash.target); if (T) { ev.tx = T.x | 0; ev.ty = T.y | 0; ev.tg = T.id; } }
+    if (ab.type === 'dash') { ev.tx = (ox + nx * ab.range) | 0; ev.ty = (oy + ny * ab.range) | 0; }
+    this.ev(ev, 'pos', { x: ox, y: oy });
     u.cds[key] = ab.cd * (1 - u.st.cdr / 100);
     u.ang = Math.atan2(ny, nx);
     u.recall = 0;
@@ -394,18 +403,18 @@ class Game {
           this.damage(u, e, dmg);
           this.applyFx(u, e, ab.fx, u.x, u.y);
         }
-        this.fx({ e: 'fx', k: 'cone', x: u.x | 0, y: u.y | 0, a: +a.toFixed(2), r: ab.range, arc: ab.arc, c: ab.vis });
         return true;
       }
       case 'ground_aoe':
-        this.zones.push({ id: this.id(), kind: 't', owner: u.id, team: u.team, x: px, y: py, r: ab.radius, start: t, at: t + ab.delay, dmg: this.dmgVal(u, ab.dmg), fxs: ab.fx, vis: ab.vis });
+        this.zones.push({ id: this.id(), kind: 't', owner: u.id, team: u.team, x: px, y: py, ox: u.x, oy: u.y, r: ab.radius, start: t, at: t + ab.delay, dmg: this.dmgVal(u, ab.dmg), fxs: ab.fx, vis: ab.vis });
         return true;
       case 'barrage': {
         const dmg = this.dmgVal(u, ab.dmg);
         for (let i = 0; i < ab.n; i++) {
           const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * ab.radius;
           const at = t + ab.delay + (i * ab.dur) / ab.n;
-          this.zones.push({ id: this.id(), kind: 't', owner: u.id, team: u.team, x: px + Math.cos(a) * rr, y: py + Math.sin(a) * rr, r: ab.aoe, start: at - ab.delay, at, dmg, fxs: ab.fx, vis: ab.vis });
+          const ex = px + Math.cos(a) * rr, ey = py + Math.sin(a) * rr;
+          this.zones.push({ id: this.id(), kind: 't', owner: u.id, team: u.team, x: ex, y: ey, ox: ex - 40, oy: ey - 700, r: ab.aoe, start: at - ab.delay, at, dmg, fxs: ab.fx, vis: ab.vis });
         }
         this.zones.push({ id: this.id(), kind: 'area', owner: u.id, team: u.team, x: px, y: py, r: ab.radius, start: t, until: t + ab.delay + ab.dur, vis: ab.vis });
         return true;
@@ -422,7 +431,6 @@ class Game {
           const h = this.dmgVal(u, ab.allyHeal);
           for (const c of this.champs) if (c.team === u.team && !c.dead && hyp(c.x - u.x, c.y - u.y) <= ab.radius + c.r) this.heal(c, h);
         }
-        this.fx({ e: 'fx', k: 'ring', x: u.x | 0, y: u.y | 0, r: ab.radius, c: ab.vis });
         return true;
       }
       case 'zone':
@@ -457,7 +465,7 @@ class Game {
         u.windup = 0;
         return true;
       case 'leap':
-        u.dash = { nx, ny, left: Math.max(60, reach), speed: ab.speed, land: { r: ab.land.r, dmg: this.dmgVal(u, ab.land.dmg), fxs: ab.land.fx }, hit: new Set(), time: 0 };
+        u.dash = { nx, ny, left: Math.max(60, reach), speed: ab.speed, land: { r: ab.land.r, dmg: this.dmgVal(u, ab.land.dmg), fxs: ab.land.fx, vis: ab.land.vis }, hit: new Set(), time: 0 };
         u.windup = 0;
         return true;
       case 'blink': {
@@ -467,7 +475,6 @@ class Game {
         u.x = bx; u.y = by;
         this.nav.pushOut(u);
         u.path = []; if (u.cmd && u.cmd.type !== 'attack') u.cmd = null;
-        this.fx({ e: 'fx', k: 'blink', x: ox | 0, y: oy | 0, x2: u.x | 0, y2: u.y | 0 });
         return true;
       }
       case 'targeted': {
@@ -491,6 +498,8 @@ class Game {
 
   // ---------------- movement helpers ----------------
   moveAlong(u, step) {
+    // cut corners: skip to the next waypoint as soon as it is in direct line of sight
+    if (u.path.length >= 2 && (this.tickN + u.id) % 3 === 0 && this.nav.los(u.x, u.y, u.path[1].x, u.path[1].y)) u.path.shift();
     while (step > 0 && u.path.length) {
       const p = u.path[0];
       const dx = p.x - u.x, dy = p.y - u.y, d = hyp(dx, dy);
@@ -547,7 +556,7 @@ class Game {
           this.damage(u, e, d.land.dmg);
           this.applyFx(u, e, d.land.fxs, u.x, u.y);
         }
-        this.fx({ e: 'fx', k: 'ring', x: u.x | 0, y: u.y | 0, r: d.land.r, c: '#e5e7eb' });
+        this.fx({ e: 'fx', k: 'land', x: u.x | 0, y: u.y | 0, r: d.land.r, c: d.land.vis });
         u.dash = null; u.path = [];
       }
       return;
@@ -755,7 +764,7 @@ class Game {
     tw.target = T ? T.id : 0;
     if (T && tw.attackCd <= 0) {
       const champ = T.kind === 'champ';
-      const dmg = champ ? tw.st.ad + tw.st.adPerMin * this.minute : T.maxHp * 0.3;
+      const dmg = champ ? tw.st.ad + tw.st.adPerMin * this.minute : T.maxHp * tw.st.minionPct;
       this.projs.push({ id: this.id(), homing: true, owner: tw.id, team: tw.team, x: tw.x, y: tw.y - 30, target: T.id, speed: 1300, dmg, tru: !champ, vis: 'tower' });
       tw.attackCd = 1 / tw.st.as;
     }
@@ -801,7 +810,7 @@ class Game {
       this.damage(src, e, p.dmg);
       this.applyFx(src, e, p.fxs, p.x, p.y);
     }
-    this.fx({ e: 'fx', k: 'boom', x: p.x | 0, y: p.y | 0, r: p.explode, c: '#fbbf24' });
+    this.fx({ e: 'fx', k: 'boom', x: p.x | 0, y: p.y | 0, r: p.explode, c: p.vis });
   }
 
   updateZones() {
@@ -901,6 +910,12 @@ class Game {
 
   // ---------------- vision ----------------
   computeVision() {
+    this.brushOcc = [new Set(), new Set()];
+    for (const u of this.units.values()) {
+      if (u.dead || u.kind === 'tower') { u.brush = -1; continue; }
+      u.brush = D.brushAt(u.x, u.y);
+      if (u.brush >= 0 && u.team < 2) this.brushOcc[u.team].add(u.brush);
+    }
     for (const tm of [0, 1]) {
       const s = [[D.BASES[tm].x, D.BASES[tm].y, C.VISION_BASE]];
       for (const u of this.units.values()) {
@@ -924,6 +939,7 @@ class Game {
     if (e.team === team) return true;
     if (e.kind === 'tower') return true;
     if (e.kind === 'champ' && e.flag >= 0) return true;
+    if (e.brush >= 0 && !this.brushOcc[team].has(e.brush) && !(e.revealUntil > this.t)) return false;
     return this.seesPoint(team, e.x, e.y, e.r);
   }
 
@@ -1035,7 +1051,8 @@ class Game {
     if (b.retreat) {
       if (hpPct > 0.92) b.retreat = false;
       else {
-        if (atHome) { u.cmd = null; u.path = []; return; }
+        if (hyp(u.x - home.x, u.y - home.y) < C.FOUNTAIN_R) { u.cmd = null; u.path = []; return; }
+        if (atHome) { this.botGo(u, home.x, home.y); return; }
         if (u.recall) return;
         if (!foe || foeD > 1000) { this.startRecall(u); return; }
         this.botAbilities(u, foe, true);
@@ -1114,9 +1131,11 @@ class Game {
     let gx, gy;
     if (front) { gx = front.x - dir * 140; gy = front.y; }
     else {
-      const own = this.towers.filter((x) => x.team === u.team && !x.dead && x.lane === u.lane).sort((a, c) => dir * (c.x - a.x))[0];
-      if (own) { gx = own.x + dir * 200; gy = own.y + (u.lane === 'top' ? 100 : u.lane === 'bot' ? -100 : 90); }
-      else { gx = D.BASES[u.team].x + dir * 300; gy = D.BASES[u.team].y; }
+      const path = this.lanePaths[u.team][u.lane];
+      let L = 0;
+      for (let i = 0; i < path.length - 1; i++) L += hyp(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+      const p = pointAlong(path, L * 0.32);
+      gx = p.x; gy = p.y;
     }
     const cover = this.enemyTowerCovering(u.team, gx, gy);
     if (cover && alliesUnder(cover) < 2) { gx = cover.x - dir * (cover.range + 120); }
@@ -1229,7 +1248,7 @@ class Game {
     this.updateFlags();
     this.separate();
     if (this.over) return;
-    if (this.tickN % 2 === 0) this.sendSnapshots();
+    this.sendSnapshots();
     if (this.tickN % TICK === 0) this.io.broadcast({ t: 'sb', p: this.scoreboard(), sc: this.score });
   }
 
@@ -1301,10 +1320,12 @@ class Game {
       if (q.kind === 't') prog = Math.round(clamp((t - q.start) / (q.at - q.start || 1), 0, 1) * 100);
       else prog = Math.round(clamp((q.until - t) / (q.until - q.start || 1), 0, 1) * 100);
       if (q.kind === 't' && t < q.start) continue;
-      z.push([q.id, q.kind, q.x | 0, q.y | 0, q.r, q.team, prog, q.vis || '']);
+      z.push([q.id, q.kind, q.x | 0, q.y | 0, q.r, q.team, prog, q.vis || '', q.ox | 0, q.oy | 0]);
     }
-    const tw = this.towers.map((x) => [Math.ceil(x.hp), x.target && this.canSee(tm, this.units.get(x.target) || { team: -1, x: 0, y: 0, r: 0 }) ? x.target : 0,
-      x.base && !this.baseVulnerable(x.team) ? 1 : 0, x.dead && x.rebuildAt ? Math.ceil(x.rebuildAt - t) : 0]);
+    const tw = this.towers.map((x) => {
+      const tg = x.target ? this.units.get(x.target) : null;
+      return [Math.ceil(x.hp), tg && this.canSee(tm, tg) ? x.target : 0, 0, x.dead && x.rebuildAt ? Math.ceil(x.rebuildAt - t) : 0];
+    });
     const f = this.flags.map((x) => [x.state === 'home' ? 0 : x.state === 'carried' ? 1 : 2, x.x | 0, x.y | 0, x.carrier, x.state === 'dropped' ? Math.ceil(x.returnAt - t) : 0]);
     const cr = this.crops.map((x) => (x.ripe ? '1' : '0')).join('');
     const e = [];
