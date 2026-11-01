@@ -19,13 +19,16 @@
     <div class="or">or join a friend</div>
     <div class="row"><input id="codeIn" maxlength="4" placeholder="CODE" class="code"><button id="joinBtn">Join</button></div>
     <div id="homeErr" class="err"></div>
+    <div class="sound-btns inline"><button class="small" data-snd="music">🎵 Music</button><button class="small" data-snd="sfx">🔊 Sounds</button></div>
     <details class="how">
       <summary>How to play</summary>
       <ul>
         <li><b>Win:</b> grab the enemy flag from their base and bring it to <b>your</b> flag stand. Your own flag must be at home for the capture to count. First to 3 captures wins.</li>
         <li>If a flag carrier is slain, the flag drops. Touch your own dropped flag to send it home (or it returns by itself after 20s).</li>
         <li><b>Right-click</b> to move or attack. <b>Q W E R</b> for abilities (hold to aim, release to cast). R unlocks at level 5.</li>
-        <li><b>Right-click a ripe crop</b> 🥕🌽🌾🎃 and stand still to harvest it for XP and gold.</li>
+        <li><b>Whack ripe crops</b> 🥕🌽🌾🎃 with attacks or abilities to harvest them for XP and gold. Rare <b>prized crops</b> ✨ grant super speed, extra damage, faster cooldowns or iron hide!</li>
+        <li><b>Shallow streams</b> flow toward each team's base — ride the current home with the flag.</li>
+        <li>Pick 2 <b>special spells</b> (like Flash and Heal) in the lobby and cast them with <b>D</b> and <b>F</b>.</li>
         <li><b>B</b> recall home · <b>P</b> shop (in base) · <b>Tab</b> scoreboard · <b>Space</b> center camera · <b>Y</b> lock/unlock camera · <b>Enter</b> team chat.</li>
         <li>Each flag is guarded by one Grain Silo, which rebuilds 2 minutes after it falls. Hide in <b>tall grass</b> to ambush — enemies can't see inside unless they're in it too.</li>
       </ul>
@@ -38,12 +41,14 @@
   <div class="lobby-wrap">
     <div class="lobby-head">
       <div><span class="muted">Room code</span> <span id="roomCode" class="roomcode"></span> <button id="copyLink" class="small">Copy invite link</button></div>
-      <button id="leaveBtn" class="small ghost">Leave</button>
+      <span><span class="sound-btns inline"><button class="small" data-snd="music">🎵</button><button class="small" data-snd="sfx">🔊</button></span> <button id="leaveBtn" class="small ghost">Leave</button></span>
     </div>
     <div class="teams">
       <div class="team t0"><h2>🔵 Blue Barn</h2><div id="team0" class="slots"></div><button class="small switch" data-team="0">Join Blue</button><button class="small addbot host-only" data-team="0">+ Add bot</button></div>
       <div class="team t1"><h2>🔴 Red Barn</h2><div id="team1" class="slots"></div><button class="small switch" data-team="1">Join Red</button><button class="small addbot host-only" data-team="1">+ Add bot</button></div>
     </div>
+    <h3>Special spells <small class="muted">— pick 2, cast with D and F</small></h3>
+    <div class="spell-pick"><div id="spellSlots" class="spell-slots"></div><div id="spellGrid" class="spell-grid"></div></div>
     <h3>Choose your champion</h3>
     <div id="champGrid" class="champ-grid"></div>
     <div id="champInfo" class="champ-info"></div>
@@ -86,7 +91,9 @@
     <div id="chat"><div id="chatlog"></div><input id="chatIn" class="hidden" maxlength="140" placeholder="Team chat — Enter to send"></div>
     <div id="shop" class="overlay hidden"></div>
     <div id="board" class="overlay hidden"></div>
-    <div id="helpTip">Right-click move/attack · QWER abilities · B recall · P shop · Tab score · H help</div>
+    <div id="helpTip">Right-click move/attack/harvest · QWER abilities · D/F spells · B recall · P shop · Tab score · H help · M music</div>
+    <div id="soundBtns" class="sound-btns"><button class="small" data-snd="music">🎵</button><button class="small" data-snd="sfx">🔊</button></div>
+    <div id="buffs"></div>
     <div id="help" class="overlay hidden"></div>
     <div id="tooltip" class="hidden"></div>
     <div id="endScreen" class="overlay hidden"></div>
@@ -95,6 +102,7 @@
 </section>
 
 <script src="/shared/data.js"></script>
+<script src="audio.js"></script>
 <script src="art.js"></script>
 <script src="client.js"></script>
 </body>

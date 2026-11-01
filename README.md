@@ -37,8 +37,10 @@ Any Node host that supports WebSockets works (Railway, Fly.io, a VPS). The serve
 ## Controls
 | Input | Action |
 |---|---|
-| Right-click | Move / attack / harvest a crop (hold to keep moving) |
+| Right-click | Move / attack / whack a crop (hold to keep moving) |
 | Q W E R | Hold to aim, release to cast (left-click while holding also casts). R unlocks at level 5 |
+| D / F | Your two special spells (picked in the lobby) |
+| M | Music on/off (🎵 / 🔊 buttons too) |
 | B | Recall to base (6s) |
 | P | Shop (in base or while dead) |
 | S | Stop |
@@ -55,7 +57,12 @@ Any Node host that supports WebSockets works (Railway, Fly.io, a VPS). The serve
 - One **Grain Silo** guards each flag. Minion waves of Chicks 🐥, Field Mice 🐭 and Tractors 🚜 march down every lane.
 - Hand-drawn **animated champions** that walk, leap and strike poses for each ability. Spells are shown by their own effects: milk spray, egg arcs, mud pools, sound waves and more.
 - **Jungle**: Raccoons 🦝, Wild Turkeys 🦃, Coyotes 🐺, plus two river bosses: the Golden Goose 🦢 (gold for the whole team) and the Prize Bull 🐂 (team damage and speed buff).
-- **Crops** 🥕🌽🌾🎃: right-click a ripe patch and stand still to harvest XP and gold. They regrow. Giant Pumpkins in the river are worth the most.
+- **Crops** 🥕🌽🌾🎃: whack ripe crops with attacks or abilities. The hit that finishes one harvests it for XP and gold. Crops regrow over time.
+- **Prized crops** ✨ sprout about once a minute at contested spots: 🥕 Golden Carrot (super speed), 🌶️ Blazing Pepper (+25% damage), 🍉 Quick Melon (cooldowns), 🍇 Iron Berries (armor + health). Each blessing lasts 60s or until you die.
+- **Shallow streams** run along every lane and flow toward each team's base, so the current carries a flag carrier home.
+- **Special spells (D/F):** pick 2 in the lobby: Hay Hop (Flash), Barn Salve (Heal), Tailwind (Ghost), Bonfire (Ignite), Haystack (Barrier), Muddy Boots (Exhaust), Hose Down (Cleanse).
+- **Silly sounds:** a campy kazoo hoedown theme, animal noises for every ability, and over-the-top death sounds (wailing moos, slide whistles, sad trombones). Everything is synthesized in the browser, so there are no audio files.
+- **Farm-equipment shop:** Pitchfork, Wheelbarrow, Milking Pail, Tractor Engine, Windmill Blades and more.
 - **Levels 1–15**, gold, a 14-item shop, fog of war, and bots that fill empty slots. If a player disconnects, a bot takes over until they rejoin with the same name and room code.
 
 ## Changing the game
@@ -69,3 +76,4 @@ All balance numbers (champion stats, ability damage and cooldowns, items, map la
 | `server/nav.js` | Pathfinding around walls |
 | `public/client.js` | HUD, controls, map and unit drawing |
 | `public/art.js` | Animated champions, spell effects, forest scenery |
+| `public/audio.js` | Sound effects and theme song |

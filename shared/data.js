@@ -121,13 +121,22 @@
     bull: { units: [['bull', 0, 0]], respawn: 240, first: 240, reward: 'bull', desc: 'Team buff: +15% damage, +10% speed for 2 min' },
   };
 
-  // Crops — right-click a ripe crop and stand still to harvest it for XP.
+  // Crops — whack a ripe crop with attacks or abilities; the hit that finishes it harvests it.
   const CROP_TYPES = {
-    carrot: { name: 'Carrots', icon: '🥕', xp: 70, gold: 10, time: 1.2, regrow: 60 },
-    corn: { name: 'Corn', icon: '🌽', xp: 90, gold: 15, time: 1.4, regrow: 75 },
-    wheat: { name: 'Wheat', icon: '🌾', xp: 80, gold: 10, time: 1.2, regrow: 70 },
-    pumpkin: { name: 'Giant Pumpkin', icon: '🎃', xp: 200, gold: 40, time: 2.0, regrow: 120 },
+    carrot: { name: 'Carrots', icon: '🥕', xp: 70, gold: 10, hits: 3, regrow: 60 },
+    corn: { name: 'Corn', icon: '🌽', xp: 90, gold: 15, hits: 3, regrow: 75 },
+    wheat: { name: 'Wheat', icon: '🌾', xp: 80, gold: 10, hits: 3, regrow: 70 },
+    pumpkin: { name: 'Giant Pumpkin', icon: '🎃', xp: 200, gold: 40, hits: 6, regrow: 120 },
   };
+  // Prized crops sprout at random spots and grant a powerful temporary blessing.
+  const PRIZE_TYPES = {
+    goldcarrot: { name: 'Golden Carrot', icon: '🥕', glow: '#facc15', hits: 5, xp: 120, gold: 40, dur: 60, stats: { msPct: 40 }, buff: 'Super Speed', desc: '+40% move speed' },
+    pepper: { name: 'Blazing Pepper', icon: '🌶️', glow: '#f97316', hits: 5, xp: 120, gold: 40, dur: 60, dmgPct: 25, buff: 'Fire Power', desc: '+25% damage dealt' },
+    melon: { name: 'Quick Melon', icon: '🍉', glow: '#4ade80', hits: 5, xp: 120, gold: 40, dur: 60, stats: { cdr: 30 }, cdNow: 0.5, buff: 'Quick Cooldowns', desc: 'Cooldowns halved instantly, then 30% cooldown reduction' },
+    ironberry: { name: 'Iron Berries', icon: '🍇', glow: '#a78bfa', hits: 5, xp: 120, gold: 40, dur: 60, stats: { armor: 40, hp: 250 }, buff: 'Iron Hide', desc: '+40 armor and +250 health' },
+  };
+  const PRIZE_SPOTS = [[2400, 1400], [2400, 455], [2400, 2345], [1500, 1400], [3300, 1400]];
+  const PRIZE = { first: 90, every: 60, max: 2 };
   const CROPS_TL = [
     { type: 'carrot', x: 780, y: 1000 }, { type: 'corn', x: 1450, y: 790 }, { type: 'wheat', x: 1500, y: 190 },
   ];
@@ -234,22 +243,57 @@
   };
 
   // ---------- Items ----------
+  // All items are farm equipment.
   const ITEMS = [
     { id: 'pitchfork', name: 'Pitchfork', icon: '🔱', cost: 400, stats: { ad: 18 } },
-    { id: 'moonshine', name: 'Moonshine Jug', icon: '🏺', cost: 400, stats: { ap: 28 } },
-    { id: 'cornfed', name: 'Corn-Fed Belly', icon: '🌽', cost: 400, stats: { hp: 220 } },
-    { id: 'horseshoe', name: 'Lucky Horseshoe', icon: '🍀', cost: 350, stats: { ms: 40 } },
-    { id: 'haybarrier', name: 'Hay Bale Barrier', icon: '🧱', cost: 650, stats: { armor: 30, regen: 4 } },
-    { id: 'alarm', name: "Rooster's Alarm", icon: '⏰', cost: 700, stats: { asPct: 35 } },
-    { id: 'courier', name: "Courier's Boots", icon: '👢', cost: 800, stats: { ms: 55 }, desc: 'Carrying a flag no longer slows you.' },
-    { id: 'feedbucket', name: 'Feed Bucket', icon: '🪣', cost: 900, stats: { ad: 15, ls: 12 } },
-    { id: 'plow', name: 'Iron Plow Plate', icon: '🛡️', cost: 1100, stats: { armor: 45, hp: 200 } },
-    { id: 'scythe', name: 'Sharpened Scythe', icon: '🗡️', cost: 1200, stats: { ad: 45, cdr: 10 } },
-    { id: 'almanac', name: "Farmer's Almanac", icon: '📖', cost: 1250, stats: { ap: 70, cdr: 15 } },
-    { id: 'engine', name: 'Tractor Engine', icon: '⚙️', cost: 1400, stats: { hp: 400, ad: 30 } },
-    { id: 'goldenegg', name: 'Golden Egg', icon: '🥇', cost: 1400, stats: { hp: 300, ap: 45, cdr: 10 } },
+    { id: 'moonshine', name: 'Fertilizer Spreader', icon: '🧪', cost: 400, stats: { ap: 28 } },
+    { id: 'cornfed', name: 'Grain Bin', icon: '🛢️', cost: 400, stats: { hp: 220 } },
+    { id: 'horseshoe', name: 'Muck Boots', icon: '🥾', cost: 350, stats: { ms: 40 } },
+    { id: 'haybarrier', name: 'Hay Baler', icon: '🧱', cost: 650, stats: { armor: 30, regen: 4 } },
+    { id: 'alarm', name: 'Thresher Gears', icon: '⚙️', cost: 700, stats: { asPct: 35 } },
+    { id: 'courier', name: 'Wheelbarrow', icon: '🛒', cost: 800, stats: { ms: 55 }, desc: 'Carry the flag in your wheelbarrow: carrying a flag no longer slows you.' },
+    { id: 'feedbucket', name: 'Milking Pail', icon: '🪣', cost: 900, stats: { ad: 15, ls: 12 } },
+    { id: 'plow', name: 'Iron Plowshare', icon: '🛡️', cost: 1100, stats: { armor: 45, hp: 200 } },
+    { id: 'scythe', name: 'Splitting Axe', icon: '🪓', cost: 1200, stats: { ad: 45, cdr: 10 } },
+    { id: 'almanac', name: 'Weather Vane', icon: '🧭', cost: 1250, stats: { ap: 70, cdr: 15 } },
+    { id: 'engine', name: 'Tractor Engine', icon: '🚜', cost: 1400, stats: { hp: 400, ad: 30 } },
+    { id: 'goldenegg', name: 'Irrigation Pump', icon: '🚰', cost: 1400, stats: { hp: 300, ap: 45, cdr: 10 } },
     { id: 'windmill', name: 'Windmill Blades', icon: '🌀', cost: 1500, stats: { ad: 35, asPct: 30, ms: 20 } },
   ];
+
+  // Special spells (pick 2 in the lobby, cast with D and F)
+  const SUMMONERS = {
+    flash: { name: 'Hay Hop', icon: '✨', cd: 180, type: 'blink', range: 420, desc: 'Instantly hop a short distance — even over walls. (Flash)' },
+    heal: { name: 'Barn Salve', icon: '❤️‍🩹', cd: 150, type: 'heal', heal: { b: 100, l: 18 }, range: 650, ms: 30, desc: 'Heal yourself and the most injured nearby ally, and gain a burst of speed. (Heal)' },
+    ghost: { name: 'Tailwind', icon: '💨', cd: 150, type: 'ghost', dur: 8, ms: 45, desc: '+45% move speed for 8 seconds. (Ghost)' },
+    ignite: { name: 'Bonfire', icon: '🔥', cd: 150, type: 'ignite', range: 600, dot: { b: 70, l: 22 }, dur: 5, desc: 'Set the enemy champion nearest your cursor on fire, dealing damage over 5s. (Ignite)' },
+    barrier: { name: 'Haystack', icon: '🧱', cd: 150, type: 'barrier', shield: { b: 100, l: 25 }, dur: 2.5, desc: 'Shield yourself for 2.5 seconds. (Barrier)' },
+    exhaust: { name: 'Muddy Boots', icon: '🥾', cd: 180, type: 'exhaust', range: 650, dur: 2.5, slow: 40, weak: 35, desc: 'Slow the enemy champion nearest your cursor by 40% and cut their damage by 35% for 2.5s. (Exhaust)' },
+    cleanse: { name: 'Hose Down', icon: '🚿', cd: 180, type: 'cleanse', desc: 'Remove all stuns, roots and slows from yourself. (Cleanse)' },
+  };
+  const DEFAULT_SPELLS = ['flash', 'heal'];
+
+  // Shallow streams. Each flows downstream (from first point to last) toward the base on its side.
+  const STREAM_W = 100, STREAM_SPEED = 170;
+  const STREAMS_BLUE = [
+    [[2250, 525], [820, 525], [610, 790]],
+    [[2250, 1462], [700, 1462]],
+    [[2250, 2275], [820, 2275], [610, 2010]],
+  ];
+  const STREAMS = [];
+  for (const s of STREAMS_BLUE) { STREAMS.push(s); STREAMS.push(s.map(([x, y]) => [W - x, y])); }
+  const streamAt = (x, y) => {
+    let best = null, bd = STREAM_W / 2;
+    for (const P of STREAMS) {
+      for (let i = 0; i < P.length - 1; i++) {
+        const [ax, ay] = P[i], [bx, by] = P[i + 1], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2));
+        const d = Math.hypot(ax + dx * t - x, ay + dy * t - y);
+        if (d < bd) { bd = d; const L = Math.sqrt(L2); best = { fx: dx / L, fy: dy / L }; }
+      }
+    }
+    return best;
+  };
   const ITEMS_BY_ID = {};
   ITEMS.forEach((it) => { ITEMS_BY_ID[it.id] = it; });
   const STAT_NAMES = { ad: 'Attack Dmg', ap: 'Ability Power', hp: 'Health', armor: 'Armor', ms: 'Move Speed', asPct: '% Attack Speed', cdr: '% Cooldown Red.', ls: '% Life Steal', regen: 'Health Regen/s' };
@@ -263,7 +307,7 @@
   };
 
   const DATA = {
-    W, H, C, BRUSHES, brushAt, TEAM_NAMES, TEAM_COLORS, TEAM_DARK, TEAM_LIGHT, BASES, FOUNTAINS, LANES, RIVER, WALLS,
+    W, H, C, BRUSHES, brushAt, SUMMONERS, DEFAULT_SPELLS, STREAMS, STREAM_W, STREAM_SPEED, streamAt, PRIZE_TYPES, PRIZE_SPOTS, PRIZE, TEAM_NAMES, TEAM_COLORS, TEAM_DARK, TEAM_LIGHT, BASES, FOUNTAINS, LANES, RIVER, WALLS,
     TOWERS, TOWER_STATS, CAMPS, CAMP_TYPES, NEUTRALS, MINIONS, CHAMPS, ITEMS, ITEMS_BY_ID, STAT_NAMES, BUILDS,
     CROPS, CROP_TYPES, xpToNext, respawnTime,
   };

@@ -151,8 +151,28 @@
       el.onmouseleave = () => { hoverChamp = null; renderChampInfo(); };
     });
     renderChampInfo();
+    renderSpells(me);
     $('readyBtn').textContent = me && me.ready ? '✓ Ready' : 'Ready';
     $('readyBtn').classList.toggle('on', !!(me && me.ready));
+  }
+  let spellSlot = 0;
+  function renderSpells(me) {
+    const sp = (me && me.spells) || D.DEFAULT_SPELLS;
+    $('spellSlots').innerHTML = ['D', 'F'].map((k, i) => { const x = D.SUMMONERS[sp[i]]; return `<div class="sslot ${spellSlot === i ? 'active' : ''}" data-slot="${i}"><span class="k">${k}</span><span class="em">${x.icon}</span>${x.name}</div>`; }).join('');
+    $('spellGrid').innerHTML = Object.entries(D.SUMMONERS).map(([id, x]) => `<div class="spell-card ${sp.includes(id) ? 'on' : ''}" data-sp="${id}"><span class="em">${x.icon}</span><b>${x.name}</b><br><small>${x.cd}s</small></div>`).join('');
+    document.querySelectorAll('.sslot').forEach((el) => { el.onclick = () => { spellSlot = +el.dataset.slot; renderSpells(me); }; });
+    document.querySelectorAll('.spell-card').forEach((el) => {
+      el.onclick = () => {
+        const next = sp.slice(), other = 1 - spellSlot, id = el.dataset.sp;
+        if (next[spellSlot] === id) return;
+        if (next[other] === id) next[other] = next[spellSlot];
+        next[spellSlot] = id;
+        send({ t: 'spells', spells: next });
+        spellSlot = other;
+      };
+      el.onmouseenter = () => { const x = D.SUMMONERS[el.dataset.sp]; $('champInfo').innerHTML = `<b style="font-size:17px">${x.icon} ${x.name}</b> — cooldown ${x.cd}s<br>${x.desc}`; };
+      el.onmouseleave = () => renderChampInfo();
+    });
   }
   function renderChampInfo() {
     const me = myLobby();
@@ -178,6 +198,23 @@
       () => prompt('Share this link:', link));
   };
 
+  // ---------------- sound buttons ----------------
+  function syncSoundBtns() {
+    document.querySelectorAll('[data-snd]').forEach((b) => b.classList.toggle('off', !Sound.state[b.dataset.snd]));
+  }
+  document.querySelectorAll('[data-snd]').forEach((b) => {
+    b.onclick = (e) => { e.stopPropagation(); Sound.ensure(); if (b.dataset.snd === 'music') Sound.setMusic(!Sound.state.music); else Sound.setSfx(!Sound.state.sfx); };
+  });
+  Sound.onChange(syncSoundBtns); syncSoundBtns();
+  function sv(x, y) { if (!G) return 1; const d = Math.hypot(x - G.cam.x, y - G.cam.y); return clamp(1.15 - d / 1400, 0, 1); }
+  const CAST_SND = {
+    cow: ['squirt', 'munch', 'gallop', 'moo'], pig: ['whoosh', 'squelch', 'oink', 'squeal'], chicken: ['bawk', 'whoosh', 'bawk', 'bawk3'],
+    goat: ['bleat', 'munch', 'boing', 'bleat'], horse: ['thud', 'gallop', 'boing', 'whinny'], sheep: ['zap', 'baa', 'lullaby', 'chime'],
+    bee: ['pew', 'squelch', 'buzz', 'buzz'], duck: ['whoosh', 'boing', 'quack', 'quack3'],
+  };
+  const BOOM_SND = { egg: 'splat', eggrain: 'splat', lullaby: 'zzz', duckdive: 'splash', bread: 'pop', hoof: 'thud', splash: 'splash' };
+  const SPELL_SND = { flash: 'zap', heal: 'chime', ghost: 'whoosh', ignite: 'fire', barrier: 'thud', exhaust: 'squelch', cleanse: 'splash' };
+
   // ---------------- game start ----------------
   const cv = $('cv');
   const ctx = cv.getContext('2d');
@@ -200,7 +237,7 @@
       you: m.you, team: m.team, info, towerIds: m.towers, snaps: [], latest: null, offset: null,
       cam: { x: D.BASES[m.team].x, y: D.BASES[m.team].y, locked: true, zoom: 1, snap: true },
       mouse: { sx: VW / 2, sy: VH / 2, wx: 0, wy: 0, right: false, lastSend: 0 },
-      held: [], cancelHeld: false, nums: [], marker: null, anim: new Map(), evq: [], projAng: new Map(), rt: null,
+      held: [], cancelHeld: false, nums: [], marker: null, anim: new Map(), evq: [], projAng: new Map(), rt: null, chopT: new Map(),
       sb: null, ended: false, feed: [], lastHud: 0, centerHold: false,
     };
     $('endScreen').classList.add('hidden');
@@ -212,6 +249,7 @@
     buildMinimapBg();
     Art.clearParts();
     showScreen('game');
+    Sound.musicLevel(true);
     const me = info.get(G.you);
     if (me) {
       $('pEmoji').textContent = me.def.icon;
@@ -288,16 +326,24 @@
         }
         break;
       case 'fx':
-        if (e.k === 'hit') Art.hit(e.x, e.y, e.big);
-        else if (e.k === 'boom' || e.k === 'land') Art.boom(e.c, e.x, e.y, e.r);
-        else if (e.k === 'blink') for (const [x, y] of [[e.x, e.y], [e.x2, e.y2]]) Art.spawn({ k: 'ring', x, y, r0: 10, r1: 70, c: '#60a5fa', w: 8, life: 0.5, fill: '#93c5fd' });
+        if (e.k === 'hit') { Art.hit(e.x, e.y, e.big); Sound.play('thwack', sv(e.x, e.y) * (e.big ? 1 : 0.6)); }
+        else if (e.k === 'boom' || e.k === 'land') { Art.boom(e.c, e.x, e.y, e.r); Sound.play(BOOM_SND[e.c] || 'thud', sv(e.x, e.y) * (e.c === 'eggrain' ? 0.5 : 1)); }
+        else if (e.k === 'blink') { for (const [x, y] of [[e.x, e.y], [e.x2, e.y2]]) Art.spawn({ k: 'ring', x, y, r0: 10, r1: 70, c: '#60a5fa', w: 8, life: 0.5, fill: '#93c5fd' }); Sound.play('chime', sv(e.x, e.y) * 0.6); }
         else if (e.k === 'buff') Art.spawn({ k: 'ring', x: e.x, y: e.y, r0: 20, r1: 60, c: '#d1fae5', w: 4, life: 0.4 });
+        else if (e.k === 'chop') {
+          for (let i = 0; i < 7; i++) Art.spawn({ k: 'feather', c: i % 2 ? '#65a30d' : '#a3e635', x: e.x, y: e.y - 10, vx: (Math.random() - 0.5) * 260, vy: -80 - Math.random() * 160, g: 500, spin: 8, s: 6, life: 0.6 });
+          for (let i = 0; i < 4; i++) Art.spawn({ k: 'dust', c: '#6b4a2b', x: e.x + (Math.random() - 0.5) * 40, y: e.y + 12, vy: -30, s: 12, life: 0.4 });
+          G.chopT.set(e.id, performance.now());
+          Sound.play('chop', sv(e.x, e.y));
+        }
         break;
+      case 'scast': scastFx(e); break;
       case 'cast': {
         const info = G.info.get(e.id);
         if (!info) break;
         const ab = info.def.abilities[e.k];
         Art.castFx(e, info.champ, ab);
+        Sound.play(CAST_SND[info.champ][KEYS.indexOf(e.k)], sv(e.x, e.y));
         const a = setPose(e.id, Art.POSES[info.champ][e.k], 0.45, e.a);
         const dist = Math.hypot(e.tx - e.x, e.ty - e.y);
         if (ab.type === 'leap') a.leap = { t0: performance.now(), dur: Math.max(0.15, dist / ab.speed), h: 45 + dist * 0.12 };
@@ -308,17 +354,23 @@
         const info = G.info.get(e.id);
         const u = G.curFrame && G.curFrame.units.find((x) => x.id === e.id);
         setPose(e.id, 'atk', 0.25, u ? Math.atan2(e.ty - u.y, e.tx - u.x) : undefined);
-        void info;
+        if (u && info) Sound.play(info.def.ranged ? 'pew' : 'swish', sv(u.x, u.y) * 0.7);
         break;
       }
-      case 'puff': { const a = G.anim.get(e.v); if (a && a.lx !== null) Art.puff(a.lx, a.ly); break; }
+      case 'puff': {
+        const a = G.anim.get(e.v), info = G.info.get(e.v);
+        if (a && a.lx !== null) Art.puff(a.lx, a.ly);
+        if (info) Sound.death(info.champ, e.v === G.you ? 1 : Math.max(0.35, a && a.lx !== null ? sv(a.lx, a.ly) : 0.4));
+        break;
+      }
       case 'lvl':
         Art.spawn({ k: 'ring', x: e.x, y: e.y, r0: 20, r1: 90, c: '#fde047', w: 6, life: 0.7 });
         for (let i = 0; i < 10; i++) Art.spawn({ k: 'star', c: '#fde047', x: e.x + (Math.random() - 0.5) * 60, y: e.y, vy: -90 - Math.random() * 60, s: 6, spin: 4, life: 0.9 });
-        if (e.id === G.you) { showAnnounce(`Level ${e.l}!` + (e.l === C.R_LEVEL ? ' Ultimate (R) unlocked!' : ''), '#fde047'); }
+        if (e.id === G.you) { Sound.play('levelup', 0.8); showAnnounce(`Level ${e.l}!` + (e.l === C.R_LEVEL ? ' Ultimate (R) unlocked!' : ''), '#fde047'); }
         break;
       case 'crop':
-        if (e.id === G.you) G.nums.push({ x: e.x, y: e.y - 30, text: `+${e.xp} XP  +${e.g}g`, col: '#86efac', t0: performance.now(), big: true });
+        if (e.id === G.you) { G.nums.push({ x: e.x, y: e.y - 30, text: `+${e.xp} XP  +${e.g}g`, col: '#86efac', t0: performance.now(), big: true }); Sound.play('coin', 0.8); }
+        Sound.play('pop', sv(e.x, e.y));
         for (let i = 0; i < 10; i++) Art.spawn({ k: 'feather', c: '#a3e635', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 200, vy: -100 - Math.random() * 100, g: 300, spin: 6, s: 6, life: 0.7 });
         break;
       case 'kill': {
@@ -338,22 +390,63 @@
         if (e.a === 'reset') showAnnounce(ours ? 'Your flag returned to base.' : 'The enemy flag returned to their base.', '#e5e7eb');
         if (e.a === 'captured') showAnnounce(ours ? `💥 The enemy captured your flag!` : `🎉 CAPTURE! ${who} scored for your team!`, ours ? '#f87171' : '#fde047');
         feed(`🚩 ${e.by ? champLabel(e.by) : ''} <span>${e.a}</span> <span class="c${e.ft}">${D.TEAM_NAMES[e.ft]} flag</span>`);
+        Sound.play(e.a === 'taken' ? (ours ? 'alarm' : 'ding') : e.a === 'dropped' ? 'boing' : e.a === 'captured' ? (ours ? 'sadhorn' : 'fanfare') : 'chime', 0.9);
         break;
       }
       case 'needflag': if (e.id === G.you) showAnnounce('Your own flag must be at home to score! Get it back!', '#fde68a'); break;
       case 'msg': if (e.id === G.you) showAnnounce(e.m, '#fde68a'); break;
       case 'tower':
+        Sound.play('crash', 0.8);
         showAnnounce(e.tm === mine ? `Your flag's Grain Silo was destroyed! It rebuilds in ${D.TOWER_STATS.base.rebuild / 60} min.` : 'Enemy Grain Silo destroyed — their flag is exposed!', e.tm === mine ? '#fca5a5' : '#86efac');
         break;
       case 'rebuild': showAnnounce(e.tm === mine ? 'Your Grain Silo has been rebuilt.' : 'The enemy rebuilt their Grain Silo.', '#e5e7eb'); break;
       case 'obj': {
         const def = D.CAMP_TYPES[e.k], n = D.NEUTRALS[e.k];
+        Sound.play(e.tm === mine ? 'fanfare' : 'alarm', 0.6);
         showAnnounce(`${e.tm === mine ? 'Your team' : 'Enemy team'} took the ${n.icon} ${n.name}! ${def.desc}`, e.tm === mine ? '#86efac' : '#fca5a5');
+        break;
+      }
+      case 'prizespawn': {
+        const pd = D.PRIZE_TYPES[e.k];
+        showAnnounce(`✨ A prized ${pd.icon} ${pd.name} sprouted! Whack it for ${pd.desc}!`, pd.glow);
+        Sound.play('sparkle', 0.8);
+        break;
+      }
+      case 'prize': {
+        const pd = D.PRIZE_TYPES[e.k];
+        if (e.id === G.you) { showAnnounce(`${pd.icon} ${pd.buff}! ${pd.desc} for ${pd.dur}s`, pd.glow); Sound.play('powerup', 1); }
+        else showAnnounce(`${nameOf(e.id)} harvested the ${pd.icon} ${pd.name} (${pd.buff})`, G.info.get(e.id) && G.info.get(e.id).team === mine ? '#86efac' : '#fca5a5');
+        feed(`${champLabel(e.id)} ✨ ${pd.icon} ${pd.name}`);
+        for (let i = 0; i < 20; i++) Art.spawn({ k: 'star', c: pd.glow, x: e.x, y: e.y, vx: (Math.random() - 0.5) * 400, vy: -100 - Math.random() * 300, g: 500, s: 8, spin: 6, life: 0.9 });
         break;
       }
       case 'objspawn': { const n = D.NEUTRALS[e.k]; showAnnounce(`The ${n.icon} ${n.name} has appeared in the river!`, '#fde68a'); break; }
       case 'chat': chatLine(`${champLabel(e.id)}: ${esc(e.m)}`); break;
       case 'win': break;
+    }
+  }
+
+  function scastFx(e) {
+    Sound.play(SPELL_SND[e.s], sv(e.x, e.y));
+    const find = (id) => G.curFrame && G.curFrame.units.find((u) => u.id === id);
+    const tg = e.tg ? find(e.tg) : null;
+    const burst = (n, x, y, f) => { for (let i = 0; i < n; i++) Art.spawn(f(i, x, y)); };
+    switch (e.s) {
+      case 'flash':
+        for (const [x, y] of [[e.x, e.y], [e.tx, e.ty]]) burst(12, x, y, () => ({ k: 'star', c: '#fde68a', x, y: y - 10, vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300, drag: 4, s: 6, spin: 6, life: 0.5 }));
+        burst(8, e.x, e.y, () => ({ k: 'feather', c: '#d6b36a', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 200, vy: -100, g: 300, spin: 6, s: 7, life: 0.7 }));
+        break;
+      case 'heal':
+        for (const p of [{ x: e.x, y: e.y }, tg].filter(Boolean)) {
+          Art.spawn({ k: 'ring', x: p.x, y: p.y, r0: 20, r1: 80, c: '#4ade80', w: 6, life: 0.5, fill: '#4ade80' });
+          burst(8, p.x, p.y, () => ({ k: 'glyph', text: '+', s: 22, c: '#4ade80', x: p.x + (Math.random() - 0.5) * 50, y: p.y, vy: -90, life: 0.8 }));
+        }
+        break;
+      case 'ghost': Art.spawn({ k: 'ring', x: e.x, y: e.y, r0: 20, r1: 90, c: '#e0f2fe', w: 5, life: 0.4 }); break;
+      case 'ignite': if (tg) burst(14, tg.x, tg.y, () => ({ k: 'dust', c: Math.random() < 0.5 ? '#f97316' : '#facc15', x: tg.x + (Math.random() - 0.5) * 30, y: tg.y, vy: -120, s: 12, life: 0.6 })); break;
+      case 'barrier': Art.spawn({ k: 'ring', x: e.x, y: e.y, r0: 50, r1: 50, c: '#d6b36a', w: 10, life: 0.6 }); burst(10, e.x, e.y, (i) => ({ k: 'feather', c: '#e9c46a', x: e.x + Math.cos(i) * 40, y: e.y + Math.sin(i) * 30, vy: -40, spin: 4, s: 8, life: 0.8 })); break;
+      case 'exhaust': if (tg) burst(10, tg.x, tg.y, () => ({ k: 'blob', c: '#78350f', x: tg.x + (Math.random() - 0.5) * 40, y: tg.y - 30, vy: 60, g: 300, s: 6, life: 0.6 })); break;
+      case 'cleanse': burst(18, e.x, e.y, () => ({ k: 'drop', c: '#bae6fd', x: e.x, y: e.y - 20, vx: (Math.random() - 0.5) * 400, vy: -150 - Math.random() * 200, g: 900, s: 4, life: 0.6 })); break;
     }
   }
 
@@ -436,6 +529,8 @@
     if (typing()) { if (e.key === 'Escape') { $('chatIn').blur(); $('chatIn').classList.add('hidden'); } return; }
     const k = e.key.toUpperCase();
     if (KEYS.includes(k)) { if (!e.repeat && !G.held.includes(k)) G.held.push(k); e.preventDefault(); return; }
+    if (k === 'D' || k === 'F') { if (!e.repeat) { updateMouseWorld(); send({ t: 'cast', k, x: Math.round(G.mouse.wx), y: Math.round(G.mouse.wy) }); } e.preventDefault(); return; }
+    if (k === 'M' && !e.repeat) { Sound.setMusic(!Sound.state.music); return; }
     if (e.repeat && k !== ' ') return;
     switch (k) {
       case 'S': send({ t: 'stop' }); break;
@@ -480,8 +575,11 @@
       if (d < u.r + 28 && d < bd) { bd = d; best = u; }
     }
     if (best) return Object.assign({ enemy: true }, best);
-    const cr = G.latest && G.latest.cr;
-    if (cr) for (const c of D.CROPS) if (cr[c.idx] === '1' && hyp(c.x - mx, c.y - my) < 50) return { crop: c };
+    const s = G.latest;
+    if (s) {
+      for (const c of D.CROPS) if (s.cr[c.idx] !== '0' && hyp(c.x - mx, c.y - my) < 55) return { enemy: true, crop: true, x: c.x, y: c.y, r: 34 };
+      for (const p of s.pz || []) if (hyp(p[2] - mx, p[3] - my) < 60) return { enemy: true, crop: true, x: p[2], y: p[3], r: 36 };
+    }
     return null;
   }
 
@@ -494,9 +592,18 @@
       const a = me.def.abilities[k];
       h += `<div class="ab" data-k="${k}"><span class="key">${k}</span>${a.icon}<div class="cdo" style="height:0"></div><div class="cdt"></div></div>`;
     }
+    (me.spells || D.DEFAULT_SPELLS).forEach((id, i) => {
+      const sp = D.SUMMONERS[id];
+      h += `<div class="ab sm ${i === 0 ? 'first' : ''}" data-s="${i}"><span class="key">${i ? 'F' : 'D'}</span>${sp.icon}<div class="cdo" style="height:0"></div><div class="cdt"></div></div>`;
+    });
     $('abilities').innerHTML = h;
-    document.querySelectorAll('#abilities .ab').forEach((el) => {
+    document.querySelectorAll('#abilities .ab[data-k]').forEach((el) => {
       el.onmouseenter = () => showTip(el, abilityTip(el.dataset.k));
+      el.onmouseleave = hideTip;
+    });
+    document.querySelectorAll('#abilities .ab[data-s]').forEach((el) => {
+      const sp = D.SUMMONERS[(me.spells || D.DEFAULT_SPELLS)[+el.dataset.s]];
+      el.onmouseenter = () => showTip(el, `<b>[${+el.dataset.s ? 'F' : 'D'}] ${sp.icon} ${sp.name}</b><br><small>Cooldown ${sp.cd}s</small><br>${sp.desc}`);
       el.onmouseleave = hideTip;
     });
   }
@@ -547,7 +654,15 @@
     $('flagstat').innerHTML = fl(G.team) + '<br>' + fl(1 - G.team);
     // abilities
     const lvl = me.lvl;
-    document.querySelectorAll('#abilities .ab').forEach((el, i) => {
+    document.querySelectorAll('#abilities .ab[data-s]').forEach((el) => {
+      const i = +el.dataset.s, cd = me.scd ? me.scd[i] : 0, max = D.SUMMONERS[me.sp[i]].cd;
+      el.classList.toggle('ready', cd <= 0);
+      el.querySelector('.cdo').style.height = `${clamp(cd / max, 0, 1) * 100}%`;
+      el.querySelector('.cdt').textContent = cd > 0 ? Math.ceil(cd) : '';
+    });
+    const BFN = { bull: ['🐂', 'Bull Strength'], ghost: ['💨', 'Tailwind'] };
+    $('buffs').innerHTML = (me.bf || []).map(([k, sec]) => { const p = D.PRIZE_TYPES[k]; const [ic, nm] = p ? [p.icon, p.buff] : (BFN[k] || ['✨', k]); return `<div class="bf">${ic} ${nm} ${sec}s</div>`; }).join('');
+    document.querySelectorAll('#abilities .ab[data-k]').forEach((el, i) => {
       const k = KEYS[i];
       const locked = k === 'R' && lvl < C.R_LEVEL;
       const cd = me.cd[i], max = me.cdm[i] || 1;
@@ -649,7 +764,10 @@
     $('help').innerHTML = `<h2>How to play <button class="small" style="float:right" onclick="document.getElementById('help').classList.add('hidden')">Close</button></h2><ul>
       <li><b>Goal:</b> carry the enemy flag 🚩 to <b>your own</b> flag stand while your flag is at home. First to ${C.CAPTURES_TO_WIN} captures wins.</li>
       <li>Slain carriers drop the flag. Touch your own dropped flag to return it; it also returns alone after ${C.FLAG_RETURN}s. Carriers move ${C.FLAG_SLOW}% slower (Courier's Boots remove this), can't recall, and are always visible.</li>
-      <li><b>Right-click</b> ground to move, an enemy to attack, or a ripe crop to harvest (stand still to finish).</li>
+      <li><b>Right-click</b> ground to move or an enemy to attack. <b>Whack ripe crops</b> with attacks or abilities — the hit that finishes a crop harvests it for XP and gold.</li>
+      <li><b>Prized crops</b> ✨ sprout every minute or so: 🥕 Golden Carrot (super speed), 🌶️ Blazing Pepper (+25% damage), 🍉 Quick Melon (cooldowns), 🍇 Iron Berries (armor + health). Blessings last 60s or until you die.</li>
+      <li><b>Shallow streams</b> flow toward each team's base and carry you along — great for running the flag home.</li>
+      <li><b>D / F</b>: your two special spells (Hay Hop = Flash, Barn Salve = Heal, and more). <b>M</b> toggles music.</li>
       <li><b>Q W E R</b>: hold to aim, release to cast (or left-click while holding). R unlocks at level ${C.R_LEVEL}.</li>
       <li><b>B</b> recall to base · <b>P</b> shop (in base) · <b>S</b> stop · <b>Tab</b> scoreboard · <b>Enter</b> team chat</li>
       <li><b>Space</b> center camera · <b>Y</b> lock/unlock camera · mouse wheel zoom · minimap: left-click look, right-click move</li>
@@ -663,7 +781,8 @@
     const won = m.winner === G.team;
     $('endScreen').innerHTML = `<h1>${won ? '🏆 Victory!' : '🌧️ Defeat'}</h1><h2>${D.TEAM_NAMES[m.winner]} wins ${m.score[m.winner]} – ${m.score[1 - m.winner]}</h2>${boardHtml(m.board)}<br><button class="big" id="backLobby">Back to lobby</button>`;
     $('endScreen').classList.remove('hidden');
-    $('backLobby').onclick = () => { G = null; showScreen('lobby'); };
+    $('backLobby').onclick = () => { G = null; Sound.musicLevel(false); showScreen('lobby'); };
+    Sound.play(won ? 'fanfare' : 'sadhorn', 1);
   }
 
   // ---------------- minimap ----------------
@@ -681,6 +800,8 @@
     for (const w of D.WALLS) m.fillRect(w.x * MS - 1, w.y * MS - 1, w.w * MS + 2, w.h * MS + 2);
     m.fillStyle = '#3f7d3a';
     for (const b of D.BRUSHES) m.fillRect(b.x * MS, b.y * MS, b.w * MS, b.h * MS);
+    m.strokeStyle = '#2b8697'; m.lineWidth = D.STREAM_W * MS;
+    for (const P of D.STREAMS) { m.beginPath(); P.forEach(([x, y], i) => (i ? m.lineTo(x * MS, y * MS) : m.moveTo(x * MS, y * MS))); m.stroke(); }
     for (const tm of [0, 1]) { m.fillStyle = D.TEAM_COLORS[tm] + '55'; m.beginPath(); m.arc(D.BASES[tm].x * MS, D.BASES[tm].y * MS, C.BASE_R * MS, 0, 7); m.fill(); }
   }
   function drawMinimap(fs) {
@@ -693,7 +814,8 @@
       m.strokeStyle = '#000'; m.lineWidth = 1;
       m.fillRect(td.x * MS - 4, td.y * MS - 4, 8, 8); m.strokeRect(td.x * MS - 4, td.y * MS - 4, 8, 8);
     });
-    for (const c of D.CROPS) if (s.cr[c.idx] === '1') { m.fillStyle = '#fde047'; m.fillRect(c.x * MS - 1, c.y * MS - 1, 2.5, 2.5); }
+    for (const c of D.CROPS) if (s.cr[c.idx] !== '0') { m.fillStyle = '#a3e635'; m.fillRect(c.x * MS - 1, c.y * MS - 1, 2.5, 2.5); }
+    for (const p of s.pz || []) { m.fillStyle = D.PRIZE_TYPES[p[1]].glow; m.beginPath(); m.arc(p[2] * MS, p[3] * MS, 4 + Math.sin(performance.now() / 200), 0, 7); m.fill(); m.strokeStyle = '#fff'; m.lineWidth = 1; m.stroke(); }
     for (const u of fs.units) {
       if (u.kind === 'champ') continue;
       m.fillStyle = u.team === 2 ? '#fbbf24' : D.TEAM_LIGHT[u.team];
@@ -772,7 +894,7 @@
       projs.push({ id: e[0], vis: e[1], x, y, team: e[4], ang });
     }
     if (G.projAng.size > 400) G.projAng.clear();
-    return { units, projs, s: b };
+    return { units, projs, s: b, pb: new Map(b.pb || []) };
   }
 
   function draw() {
@@ -822,6 +944,7 @@
     drawWater(view, now);
     drawBasesDyn(fs.s, now, inView);
     drawCrops(fs.s, now, inView);
+    drawPrizes(fs.s, now, inView);
     for (const zn of fs.s.z) if (inView(zn[2], zn[3], zn[4] + 300)) Art.zone(ctx, zn, relColor(zn[5]), now, sprite);
     drawTowerRanges(fs.s, meU);
     const list = fs.units.filter((u) => !u.dead && inView(u.x, u.y, 80));
@@ -870,7 +993,27 @@
 
   function relColor(team) { return team === G.team ? '#60a5fa' : '#ef4444'; }
 
+  function drawStreams(view, now) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(224,250,255,0.35)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (const P of D.STREAMS) {
+      for (let i = 0; i < P.length - 1; i++) {
+        const [ax, ay] = P[i], [bx, by] = P[i + 1], L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L;
+        if (Math.max(ax, bx) < view.x0 - 100 || Math.min(ax, bx) > view.x1 + 100 || Math.max(ay, by) < view.y0 - 100 || Math.min(ay, by) > view.y1 + 100) continue;
+        const off = (now * 0.17) % 90;
+        for (let d = off; d < L; d += 90) {
+          const x = ax + ux * d, y = ay + uy * d;
+          for (const side of [-22, 22]) {
+            const sx = x - uy * side, sy = y + ux * side;
+            ctx.beginPath(); ctx.moveTo(sx - ux * 10 - uy * 8, sy - uy * 10 + ux * 8); ctx.lineTo(sx, sy); ctx.lineTo(sx - ux * 10 + uy * 8, sy - uy * 10 - ux * 8); ctx.stroke();
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
   function drawWater(view, now) {
+    drawStreams(view, now);
     const R = D.RIVER;
     if (view.x1 < R.x || view.x0 > R.x + R.w) return;
     const t = now / 1000;
@@ -913,21 +1056,46 @@
   function drawCrops(s, now, inView) {
     for (const c of D.CROPS) {
       if (!inView(c.x, c.y, 60)) continue;
-      const ripe = s.cr[c.idx] === '1';
+      const ripe = s.cr[c.idx] !== '0';
       ctx.fillStyle = '#2a1d12'; ctx.beginPath(); ctx.ellipse(c.x, c.y + 10, 46, 26, 0, 0, 7); ctx.fill();
       ctx.strokeStyle = '#3d2a1a'; ctx.lineWidth = 3;
       for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(c.x - 36, c.y + 10 + i * 10); ctx.lineTo(c.x + 36, c.y + 10 + i * 10); ctx.stroke(); }
       if (ripe) {
+        const hit = G.chopT.get(-1 - c.idx);
         const bob = Math.sin(now / 400 + c.idx) * 2;
         const g = ctx.createRadialGradient(c.x, c.y, 5, c.x, c.y, 60);
         g.addColorStop(0, `rgba(253,224,71,${0.25 + 0.1 * Math.sin(now / 300 + c.idx)})`); g.addColorStop(1, 'rgba(253,224,71,0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c.x, c.y, 60, 0, 7); ctx.fill();
         const ic = D.CROP_TYPES[c.type].icon;
+        void hit;
         drawSprite(ctx, ic, 26, c.x - 18, c.y + bob);
         drawSprite(ctx, ic, 30, c.x + 12, c.y - 4 + bob);
+        const left = +s.cr[c.idx], max = D.CROP_TYPES[c.type].hits;
+        if (left < max) for (let i = 0; i < max; i++) { ctx.fillStyle = i < left ? '#a3e635' : 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.arc(c.x - (max - 1) * 6 + i * 12, c.y + 34, 4, 0, 7); ctx.fill(); }
       } else {
         drawSprite(ctx, '🌱', 16, c.x - 14, c.y + 8); drawSprite(ctx, '🌱', 16, c.x + 14, c.y + 6);
       }
+    }
+  }
+  function drawPrizes(s, now, inView) {
+    for (const [, type, x, y, left] of s.pz || []) {
+      if (!inView(x, y, 300)) continue;
+      const pd = D.PRIZE_TYPES[type], p = 0.5 + 0.5 * Math.sin(now / 250);
+      // light pillar
+      const g = ctx.createLinearGradient(x, y - 260, x, y + 20);
+      g.addColorStop(0, pd.glow + '00'); g.addColorStop(1, pd.glow + '66');
+      ctx.fillStyle = g; ctx.fillRect(x - 26, y - 260, 52, 280);
+      const rg = ctx.createRadialGradient(x, y, 5, x, y, 90);
+      rg.addColorStop(0, pd.glow + 'aa'); rg.addColorStop(1, pd.glow + '00');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, 90, 0, 7); ctx.fill();
+      ctx.fillStyle = '#2a1d12'; ctx.beginPath(); ctx.ellipse(x, y + 18, 40, 18, 0, 0, 7); ctx.fill();
+      ctx.save(); ctx.translate(x, y - 6 + Math.sin(now / 300) * 4); ctx.scale(1 + 0.06 * p, 1 + 0.06 * p);
+      drawSprite(ctx, pd.icon, 46, 0, 0);
+      ctx.restore();
+      if (Math.random() < 0.15) Art.spawn({ k: 'star', c: pd.glow, x: x + (Math.random() - 0.5) * 70, y: y - Math.random() * 40, vy: -40, s: 4, spin: 4, life: 0.8 });
+      for (let i = 0; i < pd.hits; i++) { ctx.fillStyle = i < left ? pd.glow : 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.arc(x - (pd.hits - 1) * 7 + i * 14, y + 44, 5, 0, 7); ctx.fill(); }
+      ctx.font = 'bold 14px "Trebuchet MS", sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+      ctx.strokeText(`✨ ${pd.name}`, x, y - 44); ctx.fillStyle = pd.glow; ctx.fillText(`✨ ${pd.name}`, x, y - 44);
     }
   }
   function myTeamBrushes(fs) {
@@ -1079,12 +1247,23 @@
       if (champ === 'bee') for (let i = 0; i < 4; i++) { const an = now / 200 + i * 1.57; drawSprite(ctx, '🐝', 12, u.x + Math.cos(an) * 40, u.y - 20 + Math.sin(an) * 18); }
       if (champ === 'horse' && a.move > 0.3) for (let i = 0; i < 3; i++) { ctx.strokeStyle = 'rgba(224,242,254,0.6)'; ctx.lineWidth = 2; const yy = u.y - 20 + i * 12; ctx.beginPath(); ctx.moveTo(u.x - a.face * 34, yy); ctx.lineTo(u.x - a.face * (60 + i * 8), yy); ctx.stroke(); }
     }
+    const prz = G.curFrame.pb.get(u.id);
+    if (prz) {
+      const pd = D.PRIZE_TYPES[prz], p = 0.5 + 0.5 * Math.sin(now / 120);
+      ctx.save(); ctx.globalAlpha = 0.3 + 0.25 * p; ctx.fillStyle = pd.glow; ctx.shadowColor = pd.glow; ctx.shadowBlur = 26;
+      ctx.beginPath(); ctx.ellipse(u.x, u.y + 4, 44, 38, 0, 0, 7); ctx.fill(); ctx.restore();
+      if (Math.random() < dt * 14) Art.spawn({ k: 'star', c: pd.glow, x: u.x + (Math.random() - 0.5) * 50, y: u.y + 10, vy: -90, s: 5, spin: 5, life: 0.6 });
+    }
+    if ((u.bits & 2048) && Math.random() < dt * 30) Art.spawn({ k: 'dust', c: Math.random() < 0.5 ? '#f97316' : '#facc15', x: u.x + (Math.random() - 0.5) * 36, y: u.y - 10, vy: -110, s: 10, life: 0.45 });
+    if ((u.bits & 4096) && Math.random() < dt * 10) Art.spawn({ k: 'blob', c: '#78350f', x: u.x + (Math.random() - 0.5) * 40, y: u.y - 20, vy: 60, s: 4, life: 0.5 });
+    if (a.move > 0.2 && D.streamAt(u.x, u.y) && Math.random() < dt * 20) Art.spawn({ k: 'drop', c: '#bae6fd', x: u.x + (Math.random() - 0.5) * 40, y: u.y + 22, vx: (Math.random() - 0.5) * 120, vy: -120, g: 600, s: 3, life: 0.4 });
     Art.drawChamp(ctx, champ, u.x, u.y, { face: a.face, walk: a.walk, move: a.move, t: now / 1000, pose, poseP, z, flash: a.flash, alpha: inBrush ? 0.65 : 1 });
     if (u.bits & 512) { // wool shield puffs
       ctx.save(); ctx.globalAlpha = 0.85;
       for (let i = 0; i < 9; i++) { const an = now / 600 + i * 0.7; ctx.fillStyle = '#f8fafc'; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(u.x + Math.cos(an) * 40, u.y - 4 + Math.sin(an) * 30, 8, 0, 7); ctx.fill(); ctx.stroke(); }
       ctx.restore();
     }
+    if (prz) drawSprite(ctx, D.PRIZE_TYPES[prz].icon, 18, u.x + 30, u.y - 44);
     if (u.bits & 2) { const an = now / 200; for (let i = 0; i < 3; i++) drawSprite(ctx, '⭐', 14, u.x + Math.cos(an + i * 2.1) * 22, u.y - 52 - z + Math.sin(an + i * 2.1) * 6); }
     if (u.bits & 16) { // recall swirl
       ctx.save(); ctx.strokeStyle = '#60a5fa'; ctx.shadowColor = '#60a5fa'; ctx.shadowBlur = 12; ctx.lineWidth = 4;

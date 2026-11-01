@@ -49,7 +49,10 @@ class Game {
     }
     this.towers = D.TOWERS.map((td) => this.addTower(td));
     this.camps = D.CAMPS.map((c, i) => ({ i, type: c.type, x: c.x, y: c.y, def: D.CAMP_TYPES[c.type], members: [], respawnAt: D.CAMP_TYPES[c.type].first }));
-    this.crops = D.CROPS.map((c) => ({ idx: c.idx, type: c.type, x: c.x, y: c.y, def: D.CROP_TYPES[c.type], ripe: true, regrowAt: 0 }));
+    this.crops = D.CROPS.map((c) => ({ idx: c.idx, type: c.type, x: c.x, y: c.y, def: D.CROP_TYPES[c.type], ripe: true, regrowAt: 0, unit: null }));
+    for (const c of this.crops) this.spawnCrop(c);
+    this.prizes = [];
+    this.nextPrize = process.env.BB_FAST ? 4 : D.PRIZE.first;
     this.nextWave = C.WAVE_FIRST;
     this.wave = 0;
     this.goldAcc = 0;
@@ -89,6 +92,8 @@ class Game {
     const u = this.baseUnit('champ', p.team, f.x + (p.team === 0 ? 60 : -60), f.y + (slot - 1) * 70, 30);
     Object.assign(u, {
       pid: p.pid, name: p.name, champ: p.champ, def, isBot: !!p.isBot, wasBot: !!p.isBot, lane,
+      spells: (p.spells && p.spells.length === 2 && p.spells.every((x) => D.SUMMONERS[x])) ? p.spells.slice() : D.DEFAULT_SPELLS.slice(),
+      scds: [0, 0], dots: [], weakUntil: 0, weakPct: 0,
       level: 1, xp: 0, gold: C.START_GOLD, items: [], respawnAt: 0, slot,
       cds: { Q: 0, W: 0, E: 0, R: 0 }, buffs: [], shields: [], dash: null, recall: 0, recallStart: 0,
       harvest: null, path: [], cmd: null, repathAt: 0, flag: -1,
@@ -111,6 +116,54 @@ class Game {
     Object.assign(u, { type, def, lane, wp: path, wi: Math.max(1, p.seg), hp: def.hp * (1 + 0.04 * m), ad: def.ad * (1 + 0.03 * m), armor: def.armor || 0, target: 0, scanAt: 0 });
     u.maxHp = u.hp;
     this.units.set(u.id, u);
+  }
+
+  spawnCrop(c) {
+    const u = this.baseUnit('crop', 3, c.x, c.y, 34);
+    Object.assign(u, { crop: c.idx, hp: c.def.hits, maxHp: c.def.hits, nextHit: 0 });
+    this.units.set(u.id, u);
+    c.unit = u; c.ripe = true;
+  }
+  spawnPrize() {
+    const free = D.PRIZE_SPOTS.filter(([x, y]) => !this.prizes.some((p) => p.x === x && p.y === y));
+    if (!free.length) return;
+    const [x, y] = free[Math.floor(Math.random() * free.length)];
+    const keys = Object.keys(D.PRIZE_TYPES);
+    const type = keys[Math.floor(Math.random() * keys.length)];
+    const def = D.PRIZE_TYPES[type];
+    const u = this.baseUnit('crop', 3, x, y, 36);
+    Object.assign(u, { prize: type, hp: def.hits, maxHp: def.hits, nextHit: 0 });
+    this.units.set(u.id, u);
+    this.prizes.push({ x, y, type, unit: u });
+    this.ev({ e: 'prizespawn', k: type, x, y }, 'all');
+  }
+  hitCrop(cu, src) {
+    if (!src || src.kind !== 'champ' || this.t < cu.nextHit) return 0;
+    cu.nextHit = this.t + 0.12;
+    cu.hp -= 1;
+    this.fx({ e: 'fx', k: 'chop', x: cu.x | 0, y: cu.y | 0, id: cu.id, left: cu.hp });
+    if (cu.hp > 0) return 1;
+    cu.dead = true;
+    this.units.delete(cu.id);
+    if (cu.prize) {
+      const def = D.PRIZE_TYPES[cu.prize];
+      this.prizes = this.prizes.filter((p) => p.unit !== cu);
+      src.buffs = src.buffs.filter((b) => b.prize !== cu.prize);
+      src.buffs.push({ until: this.t + def.dur, stats: def.stats || null, dmgPct: def.dmgPct || 0, prize: cu.prize });
+      if (def.cdNow) for (const k in src.cds) src.cds[k] *= def.cdNow;
+      this.recalc(src);
+      this.grantXp(src, def.xp * (1 + 0.06 * this.minute));
+      src.gold += def.gold;
+      this.ev({ e: 'prize', id: src.id, k: cu.prize, x: cu.x | 0, y: cu.y | 0 }, 'all');
+    } else {
+      const crop = this.crops[cu.crop];
+      crop.ripe = false; crop.unit = null; crop.regrowAt = this.t + crop.def.regrow;
+      const xp = crop.def.xp * (1 + 0.06 * this.minute);
+      this.grantXp(src, xp);
+      src.gold += crop.def.gold;
+      this.ev({ e: 'crop', id: src.id, c: crop.idx, xp: Math.round(xp), g: crop.def.gold, x: crop.x, y: crop.y }, 'pos');
+    }
+    return 1;
   }
 
   spawnCamp(camp) {
@@ -139,11 +192,11 @@ class Game {
     }
     for (const b of u.buffs) {
       if (!b.stats) continue;
-      for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
+      for (const k in b.stats) { if (k === 'hp') s.maxHp += b.stats.hp; else s[k] = (s[k] || 0) + b.stats[k]; }
     }
     s.as = Math.min(2.5, d.as * (1 + s.asPct / 100));
     s.ms = s.ms * (1 + s.msPct / 100);
-    s.cdr = Math.min(40, s.cdr);
+    s.cdr = Math.min(60, s.cdr);
     const oldMax = u.st ? u.st.maxHp : s.maxHp;
     u.st = s;
     u.maxHp = s.maxHp;
@@ -179,9 +232,13 @@ class Game {
   // ---------------- combat ----------------
   damage(src, dst, amt, opts = {}) {
     if (!dst || dst.dead || !(amt > 0)) return 0;
+    if (dst.kind === 'crop') return this.hitCrop(dst, src);
     if (dst.kind === 'neutral' && dst.returning) return 0;
     if (src && src.kind === 'minion' && dst.kind === 'tower') amt *= 0.5;
-    if (src && src.kind === 'champ' && src.buffs.some((b) => b.bull)) amt *= 1.15;
+    if (src && src.kind === 'champ') {
+      for (const b of src.buffs) { if (b.bull) amt *= 1.15; if (b.dmgPct) amt *= 1 + b.dmgPct / 100; }
+      if (src.weakUntil > this.t) amt *= 1 - src.weakPct / 100;
+    }
     if (!opts.true) {
       const ar = dst.kind === 'champ' ? dst.st.armor : dst.armor;
       amt = (amt * 100) / (100 + Math.max(0, ar || 0));
@@ -219,7 +276,7 @@ class Game {
   }
 
   applyFx(src, e, fx, ox, oy) {
-    if (!fx || e.dead || e.kind === 'tower') return;
+    if (!fx || e.dead || e.kind === 'tower' || e.kind === 'crop') return;
     const t = this.t;
     if (fx.slow) e.slows.push({ p: fx.slow.p, until: t + fx.slow.d });
     if (fx.root) e.rootUntil = Math.max(e.rootUntil, t + fx.root);
@@ -257,8 +314,9 @@ class Game {
       dst.dead = true;
       dst.respawnAt = t + D.respawnTime(dst.level);
       dst.d++;
-      Object.assign(dst, { cmd: null, path: [], dash: null, knock: null, recall: 0, harvest: null, windup: 0, slows: [], shields: [] });
+      Object.assign(dst, { cmd: null, path: [], dash: null, knock: null, recall: 0, harvest: null, windup: 0, slows: [], shields: [], dots: [], weakUntil: 0 });
       dst.buffs = dst.buffs.filter((b) => b.bull);
+      // a prized-crop blessing is lost on death
       const killer = src && src.kind === 'champ' ? src : null;
       if (killer) { killer.k++; killer.gold += 300; }
       for (const [id, tm] of dst.damagers) {
@@ -601,7 +659,18 @@ class Game {
     const ef = D.FOUNTAINS[1 - u.team];
     if (hyp(u.x - ef.x, u.y - ef.y) < C.FOUNTAIN_R + u.r) { this.damage(null, u, 600 * DT, { true: true }); if (u.dead) return; }
     for (const k in u.cds) if (u.cds[k] > 0) u.cds[k] = Math.max(0, u.cds[k] - DT);
+    for (let i = 0; i < 2; i++) if (u.scds[i] > 0) u.scds[i] = Math.max(0, u.scds[i] - DT);
     u.attackCd -= DT;
+    if (u.dots.length) {
+      for (const d of u.dots) {
+        if (t >= d.next && d.until > t - 0.01) { d.next = t + 0.5; this.damage(this.units.get(d.src) || null, u, d.dps * 0.5, { true: true }); if (u.dead) return; }
+      }
+      u.dots = u.dots.filter((d) => d.until > t);
+    }
+    if (!u.dash) {
+      const st = D.streamAt(u.x, u.y);
+      if (st) { u.x += st.fx * D.STREAM_SPEED * DT; u.y += st.fy * D.STREAM_SPEED * DT; this.nav.pushOut(u); }
+    }
 
     if (u.knock) { this.stepKnock(u); return; }
     if (u.dash) { this.stepDash(u); return; }
@@ -682,7 +751,7 @@ class Game {
       else if (!T || T.kind === 'champ' || hyp(T.x - m.x, T.y - m.y) > m.def.range + m.r + T.r + 60) {
         let best = null, bd = 550, bestC = null, bdc = 550;
         for (const e of this.units.values()) {
-          if (e.dead || e.team === m.team || e.team === 2) continue;
+          if (e.dead || e.team === m.team || e.team >= 2) continue;
           const d = hyp(e.x - m.x, e.y - m.y) - e.r;
           if (e.kind === 'champ') { if (d < bdc && this.canSee(m.team, e)) { bdc = d; bestC = e; } }
           else if (d < bd) { bd = d; best = e; }
@@ -745,7 +814,7 @@ class Game {
       return;
     }
     tw.attackCd -= DT;
-    const inR = (e) => e && !e.dead && e.kind !== 'neutral' && e.team !== tw.team && hyp(e.x - tw.x, e.y - tw.y) <= tw.range + e.r;
+    const inR = (e) => e && !e.dead && e.kind !== 'neutral' && e.kind !== 'crop' && e.team !== tw.team && hyp(e.x - tw.x, e.y - tw.y) <= tw.range + e.r;
     let T = tw.target ? this.units.get(tw.target) : null;
     let pri = null;
     for (const c of this.champs) if (c.team !== tw.team && c.hitChampAt > t - 1.5 && inR(c)) { pri = c; break; }
@@ -937,7 +1006,7 @@ class Game {
   }
   canSee(team, e) {
     if (e.team === team) return true;
-    if (e.kind === 'tower') return true;
+    if (e.kind === 'tower' || e.kind === 'crop') return true;
     if (e.kind === 'champ' && e.flag >= 0) return true;
     if (e.brush >= 0 && !this.brushOcc[team].has(e.brush) && !(e.revealUntil > this.t)) return false;
     return this.seesPoint(team, e.x, e.y, e.r);
@@ -954,7 +1023,10 @@ class Game {
         this.cmdClick(u, clamp(x, 0, D.W), clamp(y, 0, D.H));
         break;
       }
-      case 'cast': if (['Q', 'W', 'E', 'R'].includes(m.k)) this.cast(u, m.k, +m.x, +m.y); break;
+      case 'cast':
+        if (['Q', 'W', 'E', 'R'].includes(m.k)) this.cast(u, m.k, +m.x, +m.y);
+        else if (m.k === 'D' || m.k === 'F') this.castSpell(u, m.k === 'D' ? 0 : 1, +m.x, +m.y);
+        break;
       case 'stop': u.cmd = null; u.path = []; u.harvest = null; break;
       case 'recall': this.startRecall(u); break;
       case 'buy': this.buy(u, String(m.id)); break;
@@ -965,6 +1037,63 @@ class Game {
         break;
       }
     }
+  }
+  castSpell(u, slot, tx, ty) {
+    const id = u.spells[slot], sp = D.SUMMONERS[id];
+    if (!sp || u.dead || this.over || u.scds[slot] > 0 || u.knock || u.dash) return;
+    if (this.stunned(u) && sp.type !== 'cleanse') return;
+    if (!isFinite(tx) || !isFinite(ty)) return;
+    const t = this.t, ox = u.x, oy = u.y;
+    const nearestFoe = (range) => {
+      let best = null, bd = Infinity;
+      for (const c of this.champs) {
+        if (c.team === u.team || c.dead || !this.canSee(u.team, c) || hyp(c.x - u.x, c.y - u.y) > range + c.r) continue;
+        const d = hyp(c.x - tx, c.y - ty);
+        if (d < bd) { bd = d; best = c; }
+      }
+      return best;
+    };
+    let tgt = null;
+    switch (sp.type) {
+      case 'blink': {
+        let dx = tx - u.x, dy = ty - u.y; const len = hyp(dx, dy) || 1; dx /= len; dy /= len;
+        const reach = Math.min(len, sp.range);
+        let bx = u.x + dx * reach, by = u.y + dy * reach;
+        for (let i = 0; i < 20 && this.nav.blocked(bx, by); i++) { bx -= dx * 20; by -= dy * 20; }
+        u.x = bx; u.y = by; this.nav.pushOut(u);
+        u.path = []; if (u.cmd && u.cmd.type !== 'attack') u.cmd = null;
+        u.recall = 0;
+        break;
+      }
+      case 'heal': {
+        const amt = this.dmgVal(u, sp.heal);
+        this.heal(u, amt);
+        u.buffs.push({ until: t + 1.5, stats: { msPct: sp.ms } });
+        let ally = null, lo = 2;
+        for (const c of this.champs) if (c !== u && c.team === u.team && !c.dead && hyp(c.x - u.x, c.y - u.y) < sp.range && c.hp / c.maxHp < lo) { lo = c.hp / c.maxHp; ally = c; }
+        if (ally) { this.heal(ally, amt); ally.buffs.push({ until: t + 1.5, stats: { msPct: sp.ms } }); this.recalc(ally); tgt = ally; }
+        this.recalc(u);
+        break;
+      }
+      case 'ghost': u.buffs.push({ until: t + sp.dur, stats: { msPct: sp.ms }, ghost: true }); this.recalc(u); break;
+      case 'barrier': u.shields.push({ a: this.dmgVal(u, sp.shield), until: t + sp.dur }); break;
+      case 'cleanse': u.stunUntil = 0; u.rootUntil = 0; u.slows = []; u.weakUntil = 0; u.dots = []; break;
+      case 'ignite': {
+        tgt = nearestFoe(sp.range);
+        if (!tgt) return;
+        tgt.dots.push({ src: u.id, dps: this.dmgVal(u, sp.dot) / sp.dur, until: t + sp.dur, next: t });
+        break;
+      }
+      case 'exhaust': {
+        tgt = nearestFoe(sp.range);
+        if (!tgt) return;
+        tgt.slows.push({ p: sp.slow, until: t + sp.dur });
+        tgt.weakUntil = t + sp.dur; tgt.weakPct = sp.weak;
+        break;
+      }
+    }
+    u.scds[slot] = sp.cd;
+    this.ev({ e: 'scast', id: u.id, s: id, x: ox | 0, y: oy | 0, tx: u.x | 0, ty: u.y | 0, tg: tgt ? tgt.id : 0 }, 'pos', { x: ox, y: oy });
   }
   cmdClick(u, x, y) {
     if (u.dead) return;
@@ -981,13 +1110,6 @@ class Game {
       u.cmd = { type: 'attack', target: best.id };
       u.path = [];
       return;
-    }
-    for (const c of this.crops) {
-      if (c.ripe && hyp(c.x - x, c.y - y) < 50) {
-        u.cmd = { type: 'harvest', crop: c.idx };
-        u.path = this.nav.findPath(u.x, u.y, c.x, c.y);
-        return;
-      }
     }
     u.cmd = { type: 'move' };
     u.windup = 0;
@@ -1094,8 +1216,10 @@ class Game {
     }
     if (u.harvest) return;
     if (!foe) {
-      const crop = this.crops.find((c) => c.ripe && hyp(c.x - u.x, c.y - u.y) < 550);
-      if (crop) { if (!(u.cmd && u.cmd.type === 'harvest')) this.cmdClick(u, crop.x, crop.y); return; }
+      const pz = this.prizes.find((p) => hyp(p.x - u.x, p.y - u.y) < 1600);
+      if (pz) { this.botAttack(u, pz.unit); return; }
+      const crop = this.crops.find((c) => c.ripe && c.unit && hyp(c.x - u.x, c.y - u.y) < 550);
+      if (crop) { this.botAttack(u, crop.unit); return; }
     }
     this.botLane(u);
   }
@@ -1156,6 +1280,16 @@ class Game {
   }
   botAbilities(u, T, fleeing) {
     if (!T) return;
+    const hpp = u.hp / u.st.maxHp, dT = hyp(T.x - u.x, T.y - u.y);
+    for (let i = 0; i < 2; i++) {
+      if (u.scds[i] > 0) continue;
+      const sp = D.SUMMONERS[u.spells[i]];
+      const hm = D.FOUNTAINS[u.team];
+      if ((sp.type === 'heal' || sp.type === 'barrier') && hpp < 0.3 && dT < 700) { this.castSpell(u, i, u.x, u.y); return; }
+      if (sp.type === 'blink' && fleeing && hpp < 0.22 && dT < 400) { this.castSpell(u, i, hm.x, hm.y); return; }
+      if ((sp.type === 'ignite' || sp.type === 'exhaust') && !fleeing && T.kind === 'champ' && T.hp / T.st.maxHp < 0.4 && dT < sp.range) { this.castSpell(u, i, T.x, T.y); return; }
+      if (sp.type === 'ghost' && (fleeing || u.flag >= 0) && dT < 800) { this.castSpell(u, i, u.x, u.y); return; }
+    }
     const home = D.FOUNTAINS[u.team];
     const d = hyp(T.x - u.x, T.y - u.y);
     const hpPct = u.hp / u.st.maxHp;
@@ -1230,7 +1364,8 @@ class Game {
         if (camp.def.reward) this.ev({ e: 'objspawn', k: camp.def.reward }, 'all');
       }
     }
-    for (const c of this.crops) if (!c.ripe && t >= c.regrowAt) c.ripe = true;
+    for (const c of this.crops) if (!c.ripe && t >= c.regrowAt) this.spawnCrop(c);
+    if (t >= this.nextPrize) { this.nextPrize = t + D.PRIZE.every; if (this.prizes.length < D.PRIZE.max) this.spawnPrize(); }
     this.goldAcc += DT;
     if (this.goldAcc >= 1) { this.goldAcc -= 1; if (t > 15) for (const c of this.champs) c.gold += C.PASSIVE_GOLD; }
 
@@ -1278,7 +1413,7 @@ class Game {
     const me = this.champs.find((c) => c.pid === pid);
     return {
       t: 'start', you: me ? me.id : 0, team: me ? me.team : 0,
-      players: this.champs.map((u) => ({ id: u.id, name: u.name, champ: u.champ, team: u.team, bot: u.wasBot })),
+      players: this.champs.map((u) => ({ id: u.id, name: u.name, champ: u.champ, team: u.team, bot: u.wasBot, spells: u.spells })),
       towers: this.towers.map((tw) => tw.id),
     };
   }
@@ -1296,7 +1431,10 @@ class Game {
       if (u.flag >= 0) bits |= 32;
       if (u.buffs.some((b) => b.bull)) bits |= 64;
       if (u.dash) bits |= 128;
-      if (u.buffs.some((b) => !b.bull)) bits |= 256;
+      if (u.buffs.some((b) => !b.bull && !b.prize && !b.ghost)) bits |= 256;
+      if (u.buffs.some((b) => b.prize)) bits |= 1024;
+      if (u.dots.length) bits |= 2048;
+      if (u.weakUntil > t) bits |= 4096;
       const sh = this.shieldOf(u);
       if (sh > 0) bits |= 512;
       const rp = u.recall ? Math.round(((t - u.recallStart) / C.RECALL_TIME) * 100) : 0;
@@ -1327,13 +1465,15 @@ class Game {
       return [Math.ceil(x.hp), tg && this.canSee(tm, tg) ? x.target : 0, 0, x.dead && x.rebuildAt ? Math.ceil(x.rebuildAt - t) : 0];
     });
     const f = this.flags.map((x) => [x.state === 'home' ? 0 : x.state === 'carried' ? 1 : 2, x.x | 0, x.y | 0, x.carrier, x.state === 'dropped' ? Math.ceil(x.returnAt - t) : 0]);
-    const cr = this.crops.map((x) => (x.ripe ? '1' : '0')).join('');
+    const cr = this.crops.map((x) => (x.ripe && x.unit ? String(Math.max(1, Math.min(9, x.unit.hp))) : '0')).join('');
+    const pz = this.prizes.map((p) => [p.unit.id, p.type, p.x, p.y, p.unit.hp]);
     const e = [];
     for (const ev of this.events) {
       if (ev.route === 'all' || ev.route === tm || (ev.route === 'pos' && this.seesPoint(tm, ev.x, ev.y, 60))) e.push(ev.obj);
     }
     const camps = this.camps.filter((cp) => cp.def.reward).map((cp) => (cp.members.some((x) => !x.dead) ? 0 : Math.max(0, Math.ceil(cp.respawnAt - t))));
-    return { t: 's', T: Math.round(t * 1000), c, m, p, z, tw, f, cr, sc: this.score, e, ob: camps };
+    const pb = this.champs.filter((u) => !u.dead && (u.team === tm || this.canSee(tm, u))).map((u) => { const b = u.buffs.find((x) => x.prize); return b ? [u.id, b.prize] : null; }).filter(Boolean);
+    return { t: 's', T: Math.round(t * 1000), c, m, p, z, tw, f, cr, pz, pb, sc: this.score, e, ob: camps };
   }
   sendSnapshots() {
     const parts = [this.buildTeamSnap(0), this.buildTeamSnap(1)];
@@ -1345,6 +1485,8 @@ class Game {
         cd: ['Q', 'W', 'E', 'R'].map((k) => +u.cds[k].toFixed(2)),
         cdm: ['Q', 'W', 'E', 'R'].map((k) => +(u.def.abilities[k].cd * (1 - u.st.cdr / 100)).toFixed(1)),
         it: u.items, sh: this.canShop(u) ? 1 : 0,
+        sp: u.spells, scd: u.scds.map((x) => +x.toFixed(1)),
+        bf: u.buffs.filter((b) => b.prize || b.bull || b.ghost).map((b) => [b.prize || (b.bull ? 'bull' : 'ghost'), Math.ceil(b.until - this.t)]),
         st: { ad: Math.round(u.st.ad), ap: Math.round(u.st.ap), armor: Math.round(u.st.armor), as: +u.st.as.toFixed(2), ms: Math.round(this.speedOf(u)), range: u.st.range, cdr: u.st.cdr, ls: u.st.ls },
       };
       this.io.send(u.pid, Object.assign({}, parts[u.team], { me }));

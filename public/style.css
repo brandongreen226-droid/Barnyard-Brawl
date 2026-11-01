@@ -145,3 +145,22 @@ h3 { margin: 16px 0 8px; }
 #endScreen { text-align: center; width: 680px; }
 #endScreen h1 { font-size: 46px; }
 #ping { position: absolute; right: 320px; bottom: 12px; font-size: 11px; opacity: .7; pointer-events: none; }
+
+.spell-pick { display: flex; gap: 16px; align-items: flex-start; }
+.spell-slots { display: flex; gap: 8px; }
+.sslot { width: 92px; text-align: center; background: #fff; border: 3px solid #d6c39a; border-radius: 12px; padding: 6px 4px; cursor: pointer; font-size: 12px; }
+.sslot.active { border-color: #16a34a; background: #dcfce7; }
+.sslot .em { font-size: 26px; display: block; }
+.sslot .k { font-weight: 900; }
+.spell-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; flex: 1; }
+.spell-card { background: #fff; border: 2px solid #d6c39a; border-radius: 10px; padding: 6px 4px; text-align: center; cursor: pointer; font-size: 12px; }
+.spell-card:hover { border-color: #f0b429; }
+.spell-card.on { border-color: #16a34a; background: #f0fdf4; }
+.spell-card .em { font-size: 22px; display: block; }
+.ab.sm { width: 46px; height: 46px; font-size: 22px; margin-left: 2px; }
+.ab.sm.first { margin-left: 12px; }
+.sound-btns { position: absolute; left: 10px; top: 36px; display: flex; gap: 6px; }
+.sound-btns.inline { position: static; display: inline-flex; justify-content: center; }
+.sound-btns button.off { filter: grayscale(1); opacity: .5; }
+#buffs { position: absolute; bottom: 118px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: none; }
+#buffs .bf { background: #14110de6; border: 2px solid #f0b429; border-radius: 10px; padding: 3px 8px; font-size: 13px; font-weight: 800; }

@@ -52,7 +52,7 @@ class Room {
   takenChamps(tm, exceptPid) { return new Set(this.players.filter((p) => p.team === tm && p.pid !== exceptPid && p.champ).map((p) => p.champ)); }
   publicState() {
     return { t: 'room', code: this.code, host: this.host, state: this.state,
-      players: this.players.map((p) => ({ pid: p.pid, name: p.name, team: p.team, champ: p.champ, ready: p.ready, bot: p.bot, connected: p.connected })) };
+      players: this.players.map((p) => ({ pid: p.pid, name: p.name, team: p.team, champ: p.champ, ready: p.ready, bot: p.bot, connected: p.connected, spells: p.spells })) };
   }
   broadcast(obj) { const s = JSON.stringify(obj); for (const p of this.players) if (p.ws && p.ws.readyState === 1) p.ws.send(s); }
   sync() { this.broadcast(this.publicState()); }
@@ -66,7 +66,7 @@ class Room {
         p.champ = free[Math.floor(Math.random() * free.length)] || CHAMP_IDS[0];
       }
     }
-    const roster = this.players.map((p) => ({ pid: p.pid, name: p.name, team: p.team, champ: p.champ, isBot: p.bot }));
+    const roster = this.players.map((p) => ({ pid: p.pid, name: p.name, team: p.team, champ: p.champ, isBot: p.bot, spells: p.spells }));
     this.state = 'game';
     this.result = null;
     this.game = new Game(roster, {
@@ -123,7 +123,7 @@ function joinRoom(ws, room, name) {
   const team = room.teamCount(0) <= room.teamCount(1) ? 0 : 1;
   if (room.teamCount(team) >= 3) return send(ws, { t: 'err', m: 'Room is full (3 vs 3).' });
   const pid = nextPid++;
-  room.players.push({ pid, name, team, champ: null, ready: false, bot: false, ws, connected: true });
+  room.players.push({ pid, name, team, champ: null, ready: false, bot: false, ws, connected: true, spells: D.DEFAULT_SPELLS.slice() });
   ws.pid = pid; ws.room = room;
   if (!room.host) room.host = pid;
   send(ws, { t: 'joined', pid, code: room.code });
@@ -176,6 +176,12 @@ wss.on('connection', (ws) => {
         break;
       }
       case 'ready': me.ready = !!m.v; break;
+      case 'spells': {
+        const sp = Array.isArray(m.spells) ? m.spells.slice(0, 2) : [];
+        if (sp.length !== 2 || sp[0] === sp[1] || !sp.every((x) => D.SUMMONERS[x])) return;
+        me.spells = sp;
+        break;
+      }
       case 'addBot': {
         if (!isHost) return;
         const tm = m.team === 1 ? 1 : 0;
@@ -183,7 +189,7 @@ wss.on('connection', (ws) => {
         const taken = room.takenChamps(tm);
         const free = CHAMP_IDS.filter((c) => !taken.has(c));
         const champ = free[Math.floor(Math.random() * free.length)];
-        room.players.push({ pid: nextPid++, name: 'Bot ' + D.CHAMPS[champ].name, team: tm, champ, ready: true, bot: true, ws: null, connected: true });
+        room.players.push({ pid: nextPid++, name: 'Bot ' + D.CHAMPS[champ].name, team: tm, champ, ready: true, bot: true, ws: null, connected: true, spells: D.DEFAULT_SPELLS.slice() });
         break;
       }
       case 'removeBot': {

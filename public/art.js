@@ -596,6 +596,7 @@
       for (const c of D.CROPS) if (Math.hypot(c.x - x, c.y - y) < 80 + pad) return false;
       for (const b of D.BASES) if (Math.hypot(b.x - x, b.y - y) < D.C.BASE_R + pad) return false;
       if (x > D.RIVER.x - 40 && x < D.RIVER.x + D.RIVER.w + 40) return false;
+      if (D.streamAt(x, y) || D.streamAt(x + pad, y) || D.streamAt(x, y + pad)) return false;
       return true;
     };
     const onLane = (x, y, pad) => {
@@ -691,6 +692,21 @@
     for (let i = 0; i < 300; i++) {
       const x = tx + r() * TW, y = ty + r() * TH;
       ell(ctx, x, y, 2 + r() * 3, 1.5 + r() * 2); ctx.fill();
+    }
+    // shallow streams (banks, water, pebbles)
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const [w, c] of [[D.STREAM_W + 26, '#2a3a2c'], [D.STREAM_W + 8, '#1d5664'], [D.STREAM_W - 14, '#22707f'], [D.STREAM_W - 50, '#2b8697']]) {
+      ctx.strokeStyle = c; ctx.lineWidth = w;
+      for (const P of D.STREAMS) { ctx.beginPath(); P.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); }
+    }
+    ctx.fillStyle = 'rgba(200,210,190,0.35)';
+    for (const P of D.STREAMS) for (let i = 0; i < P.length - 1; i++) {
+      const [ax, ay] = P[i], [bx, by] = P[i + 1], L = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / L, ny = (bx - ax) / L;
+      for (let d = 0; d < L; d += 30) {
+        const side = r() < 0.5 ? -1 : 1, off = (D.STREAM_W / 2 + 4) * side + (r() - 0.5) * 8;
+        const x = ax + (bx - ax) * d / L + nx * off, y = ay + (by - ay) * d / L + ny * off;
+        if (inT(x, y, 10)) { ell(ctx, x, y, 4 + r() * 5, 3 + r() * 3); ctx.fill(); }
+      }
     }
     // bases: mossy stone clearings + barns
     for (const tm of [0, 1]) {
